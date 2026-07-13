@@ -1,0 +1,69 @@
+import {
+	BarChart3,
+	Car,
+	CreditCard,
+	FileText,
+	Gauge,
+	MapPinned,
+	Settings2,
+	Users,
+} from 'lucide-react'
+import type { ReactNode } from 'react'
+import { NavLink } from 'react-router-dom'
+
+const navItems = [
+	{ to: '/', label: 'Dashboard', icon: Gauge },
+	{ to: '/vehicles', label: 'Vehicles', icon: Car },
+	{ to: '/drivers', label: 'Drivers', icon: Users },
+	{ to: '/transactions', label: 'Transactions', icon: CreditCard },
+	{ to: '/services', label: 'Services', icon: Settings2 },
+	{ to: '/providers', label: 'Providers', icon: MapPinned },
+	{ to: '/reports', label: 'Reports', icon: BarChart3 },
+]
+
+export function AppShell({ children }: { children: ReactNode }) {
+	return (
+		<div className="app-shell">
+			<aside className="sidebar">
+				<div className="brand">
+					<div className="brand-mark">
+						<FileText size={22} />
+					</div>
+					<div>
+						<strong>FleetOS</strong>
+						<span>Mobility control</span>
+					</div>
+				</div>
+
+				<nav className="nav">
+					{navItems.map((item) => {
+						const Icon = item.icon
+						return (
+							<NavLink key={item.to} to={item.to} end={item.to === '/'}>
+								<Icon size={18} />
+								<span>{item.label}</span>
+							</NavLink>
+						)
+					})}
+				</nav>
+			</aside>
+
+			<div className="main-area">
+				<header className="topbar">
+					<div>
+						<span className="topbar-label">Workspace</span>
+						<strong>Acme Italia Fleet</strong>
+					</div>
+					<div className="topbar-user">
+						<span>FM</span>
+						<div>
+							<strong>Fleet Manager</strong>
+							<small>admin@example.com</small>
+						</div>
+					</div>
+				</header>
+				<main className="content">{children}</main>
+			</div>
+		</div>
+	)
+}
