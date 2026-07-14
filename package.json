@@ -6,6 +6,12 @@
 	"packageManager": "pnpm@11.11.0",
 	"scripts": {
 		"api": "tsx server/index.ts",
+		"db:generate": "prisma generate",
+		"db:migrate": "prisma migrate dev",
+		"db:reset": "prisma migrate reset",
+		"db:seed": "tsx prisma/seed.ts",
+		"db:studio": "prisma studio",
+		"db:up": "docker compose up -d",
 		"dev": "vite",
 		"build": "tsc -b && tsc -p tsconfig.server.json && vite build",
 		"preview": "vite preview",
@@ -13,21 +19,21 @@
 		"typecheck": "tsc -b && tsc -p tsconfig.server.json"
 	},
 	"dependencies": {
-		"@prisma/adapter-better-sqlite3": "^7.8.0",
+		"@prisma/adapter-pg": "^7.8.0",
 		"@prisma/client": "^7.8.0",
 		"@tanstack/react-query": "^5.92.0",
 		"@tanstack/react-table": "^8.21.3",
-		"better-sqlite3": "^12.11.1",
 		"dotenv": "^17.4.2",
 		"lucide-react": "^0.562.0",
+		"pg": "^8.22.0",
 		"react": "^19.2.4",
 		"react-dom": "^19.2.4",
 		"react-router-dom": "^7.11.0",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
-		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "^25.8.0",
+		"@types/pg": "^8.20.0",
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react-swc": "^4.2.3",

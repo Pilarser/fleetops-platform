@@ -154,7 +154,7 @@ async function ensureCompany() {
 
 export function createPrismaFleetStore(): FleetStore {
 	return {
-		path: process.env.DATABASE_URL ?? 'file:./dev.db',
+		path: process.env.DATABASE_URL ?? 'postgresql://fleetops:fleetops@localhost:5432/fleetops',
 		getWorkspace: async () => {
 			const [drivers, providers, services, transactions, vehicles] = await Promise.all([
 				prisma.driver.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),

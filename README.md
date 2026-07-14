@@ -17,6 +17,8 @@ FleetOS helps companies manage fleet mobility from one operations portal: vehicl
 - Local shadcn-style component primitives in `src/components/ui.tsx`
 - Plain CSS for the first iteration, with an easy path to Tailwind/shadcn CLI later
 - Lucide icons
+- Prisma 7
+- Postgres for local backend persistence via Docker
 
 ## Phase 1 Scope
 
@@ -30,7 +32,7 @@ The first web MVP focuses on the fleet manager portal:
 - Provider coverage preview
 - Monthly reporting view
 
-Demo data is seeded from `src/data/mock-data.ts`. When the local API runs, mutable data is persisted to `server/.data/fleet-db.json`.
+Demo data is seeded from `src/data/mock-data.ts` into Postgres for local backend development.
 
 ## Suggested Architecture
 
@@ -69,6 +71,19 @@ The Vite dev server is configured for port `5174`.
 
 ## Run With The Local API
 
+Start Postgres:
+
+```bash
+docker compose up -d
+```
+
+Apply migrations and seed demo data:
+
+```bash
+pnpm exec prisma migrate dev
+pnpm exec tsx prisma/seed.ts
+```
+
 Start the backend in one terminal:
 
 ```bash
@@ -81,7 +96,12 @@ Start the frontend in another terminal:
 VITE_API_URL=http://127.0.0.1:4000/api pnpm dev
 ```
 
-The API stores mutable demo data in `server/.data/fleet-db.json`. Delete that file to reset to seeded data.
+The API stores mutable demo data in the local Postgres database. To reset local data:
+
+```bash
+pnpm exec prisma migrate reset
+pnpm exec tsx prisma/seed.ts
+```
 
 Run backend tests:
 
@@ -96,8 +116,10 @@ server/
   app.ts          Server factory and route dispatch
   auth.ts         Demo sessions and role guards
   http.ts         JSON/CORS/body helpers
+  prisma.ts       Shared Prisma client
+  prisma-store.ts Prisma-backed workspace store
   schemas.ts      Zod request validation
-  storage.ts      File-backed store
+  storage.ts      File-backed store used by isolated API tests
   index.ts        Local API entrypoint
 ```
 
