@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { SessionUser, UserRole } from '../src/types'
 import { sendJson } from './http'
+import { verifyPassword } from './passwords'
 import { prisma } from './prisma'
 
 const sessions = new Map<string, SessionUser>()
@@ -22,7 +23,7 @@ export async function findUserByCredentials(email: string, password: string) {
 		where: { email: email.trim().toLowerCase() },
 	})
 
-	if (!user || user.password !== password || !isUserRole(user.role)) {
+	if (!user || !verifyPassword(password, user.password) || !isUserRole(user.role)) {
 		return undefined
 	}
 

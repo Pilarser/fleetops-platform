@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client'
 import { providers, services, transactions } from '../src/data/mock-data'
+import { hashPassword } from '../server/passwords'
 
 const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL ?? 'postgresql://fleetops:fleetops@localhost:55433/fleetops',
@@ -95,17 +96,20 @@ await prisma.company.upsert({
 })
 
 for (const user of demoUsers) {
+    const passwordHash = hashPassword(user.password)
+
     await prisma.user.upsert({
         where: { email: user.email },
         update: {
             companyId: 'demo-company',
             name: user.name,
-            password: user.password,
+            password: passwordHash,
             role: user.role,
         },
         create: {
             ...user,
             companyId: 'demo-company',
+            password: passwordHash,
         },
     })
 }
