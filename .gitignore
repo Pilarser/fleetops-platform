@@ -15,6 +15,10 @@ dist-ssr
 vite.config.js
 vite.config.d.ts
 server/.data/
+dev.db
+dev.db-*
+prisma/dev.db
+prisma/dev.db-*
 
 # Editor directories and files
 .vscode/*
@@ -26,3 +30,7 @@ server/.data/
 *.njsproj
 *.sln
 *.sw?
+
+/src/generated/prisma
+
+.env
