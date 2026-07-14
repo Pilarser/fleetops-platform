@@ -62,3 +62,19 @@ pnpm dev
 ```
 
 The Vite dev server is configured for port `5174`.
+
+## Run With The Local API
+
+Start the backend in one terminal:
+
+```bash
+pnpm api
+```
+
+Start the frontend in another terminal:
+
+```bash
+VITE_API_URL=http://127.0.0.1:4000/api pnpm dev
+```
+
+The API currently stores data in memory. Restarting `pnpm api` resets the demo data.
