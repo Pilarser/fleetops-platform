@@ -9,6 +9,7 @@
 		"dev": "vite",
 		"build": "tsc -b && tsc -p tsconfig.server.json && vite build",
 		"preview": "vite preview",
+		"test:api": "node --import tsx --test server/*.test.ts",
 		"typecheck": "tsc -b && tsc -p tsconfig.server.json"
 	},
 	"dependencies": {

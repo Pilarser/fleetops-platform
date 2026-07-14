@@ -2,6 +2,10 @@
 
 Frontend-first MVP for a legally distinct fleet mobility management product.
 
+## Product Purpose
+
+FleetOS helps companies manage fleet mobility from one operations portal: vehicles, drivers, service access, mobility spend, provider coverage, reporting, and approvals. The web app is for fleet/admin/finance users first; a driver-facing mobile or web app can be added later against the same backend.
+
 ## Stack
 
 - React 19
@@ -78,6 +82,24 @@ VITE_API_URL=http://127.0.0.1:4000/api pnpm dev
 ```
 
 The API stores mutable demo data in `server/.data/fleet-db.json`. Delete that file to reset to seeded data.
+
+Run backend tests:
+
+```bash
+pnpm test:api
+```
+
+Backend structure:
+
+```text
+server/
+  app.ts          Server factory and route dispatch
+  auth.ts         Demo sessions and role guards
+  http.ts         JSON/CORS/body helpers
+  schemas.ts      Zod request validation
+  storage.ts      File-backed store
+  index.ts        Local API entrypoint
+```
 
 ## Demo Login
 
