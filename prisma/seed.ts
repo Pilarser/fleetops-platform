@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 import { PrismaClient } from '../src/generated/prisma/client'
+import { providers, services, transactions } from '../src/data/mock-data'
 
 const adapter = new PrismaBetterSqlite3({
     url: process.env.DATABASE_URL ?? 'file:./dev.db',
@@ -111,6 +112,82 @@ await prisma.vehicle.updateMany({
     where: { id: 'vehicle-2' },
     data: { fuelType: 'hybrid' },
 })
+
+for (const service of services) {
+    await prisma.mobilityService.upsert({
+        where: { id: service.id },
+        update: {
+            name: service.name,
+            description: service.description,
+            enabled: service.enabled,
+            monthlyLimit: service.monthlyLimit,
+            requiresApproval: service.requiresApproval,
+        },
+        create: {
+            id: service.id,
+            companyId: 'demo-company',
+            name: service.name,
+            description: service.description,
+            enabled: service.enabled,
+            monthlyLimit: service.monthlyLimit,
+            requiresApproval: service.requiresApproval,
+        },
+    })
+}
+
+for (const provider of providers) {
+    await prisma.providerLocation.upsert({
+        where: { id: provider.id },
+        update: {
+            name: provider.name,
+            service: provider.service,
+            address: provider.address,
+            city: provider.city,
+            distanceKm: provider.distanceKm,
+            status: provider.status,
+        },
+        create: {
+            id: provider.id,
+            companyId: 'demo-company',
+            name: provider.name,
+            service: provider.service,
+            address: provider.address,
+            city: provider.city,
+            distanceKm: provider.distanceKm,
+            status: provider.status,
+        },
+    })
+}
+
+for (const transaction of transactions) {
+    await prisma.fleetTransaction.upsert({
+        where: { id: transaction.id },
+        update: {
+            date: transaction.date,
+            driverId: transaction.driverId,
+            vehicleId: transaction.vehicleId,
+            service: transaction.service,
+            provider: transaction.provider,
+            amount: transaction.amount,
+            vat: transaction.vat,
+            status: transaction.status,
+            expenseType: transaction.expenseType,
+        },
+        create: {
+            id: transaction.id,
+            companyId: 'demo-company',
+            date: transaction.date,
+            driverId: transaction.driverId,
+            vehicleId: transaction.vehicleId,
+            service: transaction.service,
+            provider: transaction.provider,
+            amount: transaction.amount,
+            vat: transaction.vat,
+            status: transaction.status,
+            expenseType: transaction.expenseType,
+        },
+    })
+}
 
 console.log('Seeded demo fleet data.')
 

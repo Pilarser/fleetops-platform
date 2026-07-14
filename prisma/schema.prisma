@@ -18,6 +18,9 @@ model Company {
   users     User[]
   drivers   Driver[]
   vehicles  Vehicle[]
+  services  MobilityService[]
+  providers ProviderLocation[]
+  transactions FleetTransaction[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -63,4 +66,48 @@ model Vehicle {
   company      Company  @relation(fields: [companyId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model MobilityService {
+  id               String   @id
+  companyId        String
+  name             String
+  description      String
+  enabled          Boolean
+  monthlyLimit     Float
+  requiresApproval Boolean
+  company          Company  @relation(fields: [companyId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model ProviderLocation {
+  id         String   @id
+  companyId  String
+  name       String
+  service    String
+  address    String
+  city       String
+  distanceKm Float
+  status     String
+  company    Company  @relation(fields: [companyId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model FleetTransaction {
+  id          String   @id
+  companyId   String
+  date        String
+  driverId    String
+  vehicleId   String
+  service     String
+  provider    String
+  amount      Float
+  vat         Float
+  status      String
+  expenseType String
+  company     Company  @relation(fields: [companyId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
