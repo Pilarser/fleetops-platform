@@ -102,7 +102,7 @@ describe('fleet API', () => {
 		})
 
 		assert.equal(response.status, 201)
-		assert.ok(store.getWorkspace().drivers.some((driver) => driver.email === 'backend.test@example.com'))
+		assert.ok((await store.getWorkspace()).drivers.some((driver) => driver.email === 'backend.test@example.com'))
 	})
 
 	it('blocks driver role from admin workspace access', async () => {

@@ -12,6 +12,16 @@ export interface FleetDatabase {
 	vehicles: Vehicle[]
 }
 
+export interface FleetStore {
+	path: string
+	getWorkspace: () => Promise<FleetDatabase>
+	createDriver: (driver: Driver) => Promise<Driver>
+	createVehicle: (vehicle: Vehicle) => Promise<Vehicle>
+	toggleService: (serviceId: MobilityService['id']) => Promise<MobilityService | undefined>
+	updateDriver: (driver: Driver) => Promise<Driver | undefined>
+	updateVehicle: (vehicle: Vehicle) => Promise<Vehicle | undefined>
+}
+
 function seedDatabase(): FleetDatabase {
 	return {
 		drivers: structuredClone(seedDrivers),
@@ -43,8 +53,8 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 
 	return {
 		path,
-		getWorkspace: () => database,
-		createDriver: (driver: Driver) => {
+		getWorkspace: async () => database,
+		createDriver: async (driver: Driver) => {
 			database = {
 				...database,
 				drivers: [...database.drivers, driver],
@@ -52,7 +62,7 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			writeDatabase(path, database)
 			return driver
 		},
-		createVehicle: (vehicle: Vehicle) => {
+		createVehicle: async (vehicle: Vehicle) => {
 			database = {
 				...database,
 				vehicles: [...database.vehicles, vehicle],
@@ -60,7 +70,7 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			writeDatabase(path, database)
 			return vehicle
 		},
-		toggleService: (serviceId: MobilityService['id']) => {
+		toggleService: async (serviceId: MobilityService['id']) => {
 			let updatedService: MobilityService | undefined
 			database = {
 				...database,
@@ -75,7 +85,7 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			writeDatabase(path, database)
 			return updatedService
 		},
-		updateDriver: (driver: Driver) => {
+		updateDriver: async (driver: Driver) => {
 			let updatedDriver: Driver | undefined
 			database = {
 				...database,
@@ -90,7 +100,7 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			writeDatabase(path, database)
 			return updatedDriver
 		},
-		updateVehicle: (vehicle: Vehicle) => {
+		updateVehicle: async (vehicle: Vehicle) => {
 			let updatedVehicle: Vehicle | undefined
 			database = {
 				...database,
@@ -105,7 +115,5 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			writeDatabase(path, database)
 			return updatedVehicle
 		},
-	}
+	} satisfies FleetStore
 }
-
-export type FleetStore = ReturnType<typeof createFleetStore>

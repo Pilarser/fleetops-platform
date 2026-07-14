@@ -45,6 +45,7 @@ await prisma.company.upsert({
                     id: 'driver-1',
                     name: 'Marta Rinaldi',
                     email: 'marta.rinaldi@example.com',
+                    vehicleId: 'vehicle-1',
                     status: 'active',
                     costCenter: 'Sales',
                     monthlySpend: 410,
@@ -54,6 +55,7 @@ await prisma.company.upsert({
                     id: 'driver-2',
                     name: 'Luca Ferri',
                     email: 'luca.ferri@example.com',
+                    vehicleId: 'vehicle-2',
                     status: 'active',
                     costCenter: 'Operations',
                     monthlySpend: 295,
@@ -68,7 +70,7 @@ await prisma.company.upsert({
                     plate: 'GE842LK',
                     make: 'Fiat',
                     model: '500e',
-                    fuelType: 'Electric',
+                    fuelType: 'electric',
                     status: 'active',
                     costCenter: 'Sales',
                     monthlySpend: 520,
@@ -79,7 +81,7 @@ await prisma.company.upsert({
                     plate: 'FN193TR',
                     make: 'Toyota',
                     model: 'Yaris Hybrid',
-                    fuelType: 'Hybrid',
+                    fuelType: 'hybrid',
                     status: 'maintenance',
                     costCenter: 'Operations',
                     monthlySpend: 430,
@@ -88,6 +90,26 @@ await prisma.company.upsert({
             ],
         },
     },
+})
+
+await prisma.driver.updateMany({
+    where: { id: 'driver-1' },
+    data: { vehicleId: 'vehicle-1' },
+})
+
+await prisma.driver.updateMany({
+    where: { id: 'driver-2' },
+    data: { vehicleId: 'vehicle-2' },
+})
+
+await prisma.vehicle.updateMany({
+    where: { id: 'vehicle-1' },
+    data: { fuelType: 'electric' },
+})
+
+await prisma.vehicle.updateMany({
+    where: { id: 'vehicle-2' },
+    data: { fuelType: 'hybrid' },
 })
 
 console.log('Seeded demo fleet data.')

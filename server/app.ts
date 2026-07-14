@@ -55,7 +55,7 @@ export function createFleetServer(store: FleetStore = createFleetStore()) {
 				if (!requireRole(request, response, [...workspaceRoles])) {
 					return
 				}
-				sendJson(response, 200, store.getWorkspace())
+				sendJson(response, 200, await store.getWorkspace())
 				return
 			}
 
@@ -70,7 +70,7 @@ export function createFleetServer(store: FleetStore = createFleetStore()) {
 					monthlySpend: 0,
 					personalSpend: 0,
 				}
-				sendJson(response, 201, store.createDriver(driver))
+				sendJson(response, 201, await store.createDriver(driver))
 				return
 			}
 
@@ -80,8 +80,8 @@ export function createFleetServer(store: FleetStore = createFleetStore()) {
 				}
 				const id = decodeURIComponent(url.pathname.replace('/api/drivers/', ''))
 				const payload = driverPayloadSchema.parse(await readBody(request))
-				const current = store.getWorkspace().drivers.find((driver) => driver.id === id)
-				const updatedDriver = current ? store.updateDriver({ ...current, ...payload, id }) : undefined
+				const current = (await store.getWorkspace()).drivers.find((driver) => driver.id === id)
+				const updatedDriver = current ? await store.updateDriver({ ...current, ...payload, id }) : undefined
 				if (!updatedDriver) {
 					sendJson(response, 404, { message: 'Driver not found' })
 					return
@@ -100,7 +100,7 @@ export function createFleetServer(store: FleetStore = createFleetStore()) {
 					id: nextId('vehicle'),
 					monthlySpend: 0,
 				}
-				sendJson(response, 201, store.createVehicle(vehicle))
+				sendJson(response, 201, await store.createVehicle(vehicle))
 				return
 			}
 
@@ -110,8 +110,8 @@ export function createFleetServer(store: FleetStore = createFleetStore()) {
 				}
 				const id = decodeURIComponent(url.pathname.replace('/api/vehicles/', ''))
 				const payload = vehiclePayloadSchema.parse(await readBody(request))
-				const current = store.getWorkspace().vehicles.find((vehicle) => vehicle.id === id)
-				const updatedVehicle = current ? store.updateVehicle({ ...current, ...payload, id }) : undefined
+				const current = (await store.getWorkspace()).vehicles.find((vehicle) => vehicle.id === id)
+				const updatedVehicle = current ? await store.updateVehicle({ ...current, ...payload, id }) : undefined
 				if (!updatedVehicle) {
 					sendJson(response, 404, { message: 'Vehicle not found' })
 					return
@@ -125,7 +125,7 @@ export function createFleetServer(store: FleetStore = createFleetStore()) {
 					return
 				}
 				const id = serviceIdSchema.parse(decodeURIComponent(url.pathname.replace('/api/services/', ''))) as MobilityService['id']
-				const updatedService = store.toggleService(id)
+				const updatedService = await store.toggleService(id)
 				if (!updatedService) {
 					sendJson(response, 404, { message: 'Service not found' })
 					return
