@@ -1,9 +1,10 @@
 import { BarChart3 } from 'lucide-react'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
-import { services, transactions } from '../data/mock-data'
+import { useFleetWorkspace } from '../state/fleet-workspace'
 
 export function ReportsPage() {
+	const { services, transactions } = useFleetWorkspace()
 	const totalsByService = services.map((service) => {
 		const total = transactions
 			.filter((transaction) => transaction.service === service.id)

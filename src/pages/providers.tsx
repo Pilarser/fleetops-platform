@@ -1,8 +1,11 @@
 import { Badge, Card, PageHeader, Table } from '../components/ui'
 import { providers } from '../data/mock-data'
+import { useFleetWorkspace } from '../state/fleet-workspace'
 import { getServiceLabel, statusTone } from './helpers'
 
 export function ProvidersPage() {
+	const { services } = useFleetWorkspace()
+
 	return (
 		<>
 			<PageHeader
@@ -34,7 +37,7 @@ export function ProvidersPage() {
 								<td>
 									<strong>{provider.name}</strong>
 								</td>
-								<td>{getServiceLabel(provider.service)}</td>
+								<td>{getServiceLabel(provider.service, services)}</td>
 								<td>
 									{provider.address}, {provider.city}
 								</td>

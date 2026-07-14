@@ -1,10 +1,11 @@
 import { AlertTriangle, Car, CreditCard, Users, Zap } from 'lucide-react'
-import { drivers, services, transactions, vehicles } from '../data/mock-data'
 import { formatCurrency } from '../data/formatters'
 import { Badge, Card, MetricCard, PageHeader, Table } from '../components/ui'
 import { getDriverName, getServiceLabel, getVehiclePlate, statusTone } from './helpers'
+import { useFleetWorkspace } from '../state/fleet-workspace'
 
 export function DashboardPage() {
+	const { drivers, services, transactions, vehicles } = useFleetWorkspace()
 	const monthlySpend = transactions.reduce((total, transaction) => total + transaction.amount, 0)
 	const pendingTransactions = transactions.filter((transaction) => transaction.status === 'pending').length
 	const enabledServices = services.filter((service) => service.enabled).length
@@ -57,9 +58,9 @@ export function DashboardPage() {
 						renderRow={(transaction) => (
 							<tr key={transaction.id}>
 								<td>{transaction.date}</td>
-								<td>{getDriverName(transaction.driverId)}</td>
-								<td>{getVehiclePlate(transaction.vehicleId)}</td>
-								<td>{getServiceLabel(transaction.service)}</td>
+								<td>{getDriverName(transaction.driverId, drivers)}</td>
+								<td>{getVehiclePlate(transaction.vehicleId, vehicles)}</td>
+								<td>{getServiceLabel(transaction.service, services)}</td>
 								<td>{formatCurrency(transaction.amount)}</td>
 								<td>
 									<Badge tone={statusTone(transaction.status)}>{transaction.status}</Badge>
