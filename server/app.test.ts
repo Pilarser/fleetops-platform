@@ -3,12 +3,36 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import type { SessionUser } from '../src/types'
 import { createFleetServer } from './app'
 import { createFleetStore } from './storage'
 
 const tempDir = mkdtempSync(join(tmpdir(), 'fleet-api-'))
 const store = createFleetStore(join(tempDir, 'fleet-db.json'))
-const server = createFleetServer(store)
+const testUsers: SessionUser[] = [
+	{
+		id: 'user-admin',
+		name: 'Fleet Manager',
+		email: 'admin@example.com',
+		role: 'fleet_admin',
+		companyName: 'FleetOps Demo',
+	},
+	{
+		id: 'user-driver',
+		name: 'Driver Demo',
+		email: 'driver@example.com',
+		role: 'driver',
+		companyName: 'FleetOps Demo',
+	},
+]
+const server = createFleetServer(store, {
+	findUser: async (email, password) => {
+		if (password !== 'demo1234') {
+			return undefined
+		}
+		return testUsers.find((user) => user.email === email.trim().toLowerCase())
+	},
+})
 let baseUrl = ''
 
 before(async () => {

@@ -9,37 +9,38 @@ const adapter = new PrismaBetterSqlite3({
 
 const prisma = new PrismaClient({ adapter })
 
+const demoUsers = [
+    {
+        id: 'user-admin',
+        name: 'Admin User',
+        email: 'admin@example.com',
+        password: 'demo1234',
+        role: 'fleet_admin',
+    },
+    {
+        id: 'user-finance',
+        name: 'Finance User',
+        email: 'finance@example.com',
+        password: 'demo1234',
+        role: 'finance',
+    },
+    {
+        id: 'user-driver',
+        name: 'Driver User',
+        email: 'driver@example.com',
+        password: 'demo1234',
+        role: 'driver',
+    },
+]
+
 await prisma.company.upsert({
     where: { id: 'demo-company' },
-    update: {},
+    update: {
+        name: 'FleetOps Demo',
+    },
     create: {
         id: 'demo-company',
         name: 'FleetOps Demo',
-        users: {
-            create: [
-                {
-                    id: 'user-admin',
-                    name: 'Admin User',
-                    email: 'admin@example.com',
-                    password: 'demo1234',
-                    role: 'fleet_admin',
-                },
-                {
-                    id: 'user-finance',
-                    name: 'Finance User',
-                    email: 'finance@example.com',
-                    password: 'demo1234',
-                    role: 'finance',
-                },
-                {
-                    id: 'user-driver',
-                    name: 'Driver User',
-                    email: 'driver@example.com',
-                    password: 'demo1234',
-                    role: 'driver',
-                },
-            ],
-        },
         drivers: {
             create: [
                 {
@@ -92,6 +93,22 @@ await prisma.company.upsert({
         },
     },
 })
+
+for (const user of demoUsers) {
+    await prisma.user.upsert({
+        where: { email: user.email },
+        update: {
+            companyId: 'demo-company',
+            name: user.name,
+            password: user.password,
+            role: user.role,
+        },
+        create: {
+            ...user,
+            companyId: 'demo-company',
+        },
+    })
+}
 
 await prisma.driver.updateMany({
     where: { id: 'driver-1' },

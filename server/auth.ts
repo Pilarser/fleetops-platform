@@ -1,29 +1,48 @@
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { demoUsers } from '../src/data/demo-users'
 import type { SessionUser, UserRole } from '../src/types'
 import { sendJson } from './http'
+import { prisma } from './prisma'
 
 const sessions = new Map<string, SessionUser>()
 
-export function publicUser(user: (typeof demoUsers)[number]): SessionUser {
+export interface AuthProvider {
+	findUser: (email: string, password: string) => Promise<SessionUser | undefined>
+}
+
+const userRoles = ['fleet_admin', 'manager', 'finance', 'driver', 'support'] satisfies UserRole[]
+
+function isUserRole(role: string): role is UserRole {
+	return userRoles.includes(role as UserRole)
+}
+
+export async function findUserByCredentials(email: string, password: string) {
+	const user = await prisma.user.findUnique({
+		include: { company: true },
+		where: { email: email.trim().toLowerCase() },
+	})
+
+	if (!user || user.password !== password || !isUserRole(user.role)) {
+		return undefined
+	}
+
 	return {
 		id: user.id,
 		name: user.name,
 		email: user.email,
 		role: user.role,
-		companyName: user.companyName,
+		companyName: user.company.name,
 	}
+}
+
+export const prismaAuthProvider: AuthProvider = {
+	findUser: findUserByCredentials,
 }
 
 export function createSession(user: SessionUser) {
 	const token = `demo-token-${randomUUID()}`
 	sessions.set(token, user)
 	return token
-}
-
-export function findDemoUser(email: string, password: string) {
-	return demoUsers.find((user) => user.email === email.trim().toLowerCase() && user.password === password)
 }
 
 function getBearerToken(request: IncomingMessage) {

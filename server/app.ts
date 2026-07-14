@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import type { Driver, MobilityService, Vehicle } from '../src/types'
-import { createSession, findDemoUser, publicUser, requireRole, requireUser } from './auth'
+import { createSession, prismaAuthProvider, requireRole, requireUser, type AuthProvider } from './auth'
 import { readBody, sendJson } from './http'
 import { driverPayloadSchema, loginSchema, serviceIdSchema, vehiclePayloadSchema } from './schemas'
 import { createFleetStore, type FleetStore } from './storage'
@@ -12,7 +12,7 @@ function nextId(prefix: string) {
 	return `${prefix}-${Date.now()}`
 }
 
-export function createFleetServer(store: FleetStore = createFleetStore()) {
+export function createFleetServer(store: FleetStore = createFleetStore(), authProvider: AuthProvider = prismaAuthProvider) {
 	return createServer(async (request, response) => {
 		const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
 		const method = request.method ?? 'GET'
@@ -30,14 +30,13 @@ export function createFleetServer(store: FleetStore = createFleetStore()) {
 
 			if (method === 'POST' && url.pathname === '/api/auth/login') {
 				const payload = loginSchema.parse(await readBody(request))
-				const user = findDemoUser(payload.email, payload.password)
+				const sessionUser = await authProvider.findUser(payload.email, payload.password)
 
-				if (!user) {
+				if (!sessionUser) {
 					sendJson(response, 401, { message: 'Invalid email or password' })
 					return
 				}
 
-				const sessionUser = publicUser(user)
 				sendJson(response, 200, { token: createSession(sessionUser), user: sessionUser })
 				return
 			}
