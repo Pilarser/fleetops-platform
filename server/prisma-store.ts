@@ -174,44 +174,60 @@ export function createPrismaFleetStore(): FleetStore {
 		},
 		createDriver: async (driver) => {
 			await ensureCompany()
-			const createdDriver = await prisma.driver.create({
-				data: {
-					id: driver.id,
-					companyId,
-					vehicleId: driver.vehicleId || null,
-					name: driver.name,
-					email: driver.email,
-					status: driver.status,
-					costCenter: driver.costCenter,
-					monthlySpend: driver.monthlySpend,
-					personalSpend: driver.personalSpend,
-				},
+			const createdDriver = await prisma.$transaction(async (tx) => {
+				if (driver.vehicleId) {
+					await tx.driver.updateMany({
+						where: {
+							companyId,
+							vehicleId: driver.vehicleId,
+						},
+						data: { vehicleId: null },
+					})
+				}
+
+				return tx.driver.create({
+					data: {
+						id: driver.id,
+						companyId,
+						vehicleId: driver.vehicleId || null,
+						name: driver.name,
+						email: driver.email,
+						status: driver.status,
+						costCenter: driver.costCenter,
+						monthlySpend: driver.monthlySpend,
+						personalSpend: driver.personalSpend,
+					},
+				})
 			})
 			return mapDriver(createdDriver)
 		},
 		createVehicle: async (vehicle) => {
 			await ensureCompany()
-			const createdVehicle = await prisma.vehicle.create({
-				data: {
-					id: vehicle.id,
-					companyId,
-					plate: vehicle.plate,
-					make: vehicle.make,
-					model: vehicle.model,
-					fuelType: vehicle.fuelType,
-					status: vehicle.status,
-					costCenter: vehicle.costCenter,
-					monthlySpend: vehicle.monthlySpend,
-					mileageKm: vehicle.mileageKm,
-				},
-			})
-
-			if (vehicle.assignedDriverId) {
-				await prisma.driver.update({
-					where: { id: vehicle.assignedDriverId },
-					data: { vehicleId: createdVehicle.id },
+			const createdVehicle = await prisma.$transaction(async (tx) => {
+				const vehicleRecord = await tx.vehicle.create({
+					data: {
+						id: vehicle.id,
+						companyId,
+						plate: vehicle.plate,
+						make: vehicle.make,
+						model: vehicle.model,
+						fuelType: vehicle.fuelType,
+						status: vehicle.status,
+						costCenter: vehicle.costCenter,
+						monthlySpend: vehicle.monthlySpend,
+						mileageKm: vehicle.mileageKm,
+					},
 				})
-			}
+
+				if (vehicle.assignedDriverId) {
+					await tx.driver.update({
+						where: { id: vehicle.assignedDriverId },
+						data: { vehicleId: vehicleRecord.id },
+					})
+				}
+
+				return vehicleRecord
+			})
 
 			const drivers = await prisma.driver.findMany({ where: { companyId } })
 			return mapVehicle(createdVehicle, drivers)
@@ -229,17 +245,30 @@ export function createPrismaFleetStore(): FleetStore {
 		},
 		updateDriver: async (driver) => {
 			try {
-				const updatedDriver = await prisma.driver.update({
-					where: { id: driver.id },
-					data: {
-						vehicleId: driver.vehicleId || null,
-						name: driver.name,
-						email: driver.email,
-						status: driver.status,
-						costCenter: driver.costCenter,
-						monthlySpend: driver.monthlySpend,
-						personalSpend: driver.personalSpend,
-					},
+				const updatedDriver = await prisma.$transaction(async (tx) => {
+					if (driver.vehicleId) {
+						await tx.driver.updateMany({
+							where: {
+								companyId,
+								id: { not: driver.id },
+								vehicleId: driver.vehicleId,
+							},
+							data: { vehicleId: null },
+						})
+					}
+
+					return tx.driver.update({
+						where: { id: driver.id },
+						data: {
+							vehicleId: driver.vehicleId || null,
+							name: driver.name,
+							email: driver.email,
+							status: driver.status,
+							costCenter: driver.costCenter,
+							monthlySpend: driver.monthlySpend,
+							personalSpend: driver.personalSpend,
+						},
+					})
 				})
 				return mapDriver(updatedDriver)
 			} catch {

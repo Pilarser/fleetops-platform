@@ -13,7 +13,7 @@ export const driverPayloadSchema = z.object({
 	name: z.string().min(1),
 	email: z.string().email(),
 	status: driverStatusSchema,
-	vehicleId: z.string().min(1),
+	vehicleId: z.string(),
 	costCenter: z.string().min(1),
 })
 
@@ -23,7 +23,7 @@ export const vehiclePayloadSchema = z.object({
 	model: z.string().min(1),
 	fuelType: fuelTypeSchema,
 	status: vehicleStatusSchema,
-	assignedDriverId: z.string().min(1),
+	assignedDriverId: z.string(),
 	costCenter: z.string().min(1),
 	mileageKm: z.number().min(0),
 })

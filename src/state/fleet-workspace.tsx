@@ -22,6 +22,46 @@ function nextId(prefix: string) {
 	return `${prefix}-${Date.now()}`
 }
 
+function applyDriverAssignment(drivers: Driver[], driver: Driver) {
+	return drivers.map((item) => {
+		if (item.id === driver.id) {
+			return driver
+		}
+		if (driver.vehicleId && item.vehicleId === driver.vehicleId) {
+			return { ...item, vehicleId: '' }
+		}
+		return item
+	})
+}
+
+function assignVehicleDriver(drivers: Driver[], vehicle: Vehicle) {
+	if (!vehicle.assignedDriverId) {
+		return drivers.map((driver) => (driver.vehicleId === vehicle.id ? { ...driver, vehicleId: '' } : driver))
+	}
+
+	return drivers.map((driver) => {
+		if (driver.id === vehicle.assignedDriverId) {
+			return { ...driver, vehicleId: vehicle.id }
+		}
+		if (driver.vehicleId === vehicle.id) {
+			return { ...driver, vehicleId: '' }
+		}
+		return driver
+	})
+}
+
+function applyDriverToVehicles(vehicles: Vehicle[], driver: Driver) {
+	return vehicles.map((vehicle) => {
+		if (driver.vehicleId && vehicle.id === driver.vehicleId) {
+			return { ...vehicle, assignedDriverId: driver.id }
+		}
+		if (vehicle.assignedDriverId === driver.id) {
+			return { ...vehicle, assignedDriverId: '' }
+		}
+		return vehicle
+	})
+}
+
 export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 	const apiMode = hasFleetApi() ? 'connected' : 'local'
 	const [drivers, setDrivers] = useState(initialDrivers)
@@ -53,6 +93,13 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 		}
 	}, [])
 
+	async function refreshWorkspace() {
+		const workspace = await fleetApi.getWorkspace()
+		setDrivers(workspace.drivers)
+		setServices(workspace.services)
+		setVehicles(workspace.vehicles)
+	}
+
 	const value = useMemo<FleetWorkspaceState>(
 		() => ({
 			apiMode,
@@ -62,47 +109,51 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 			vehicles,
 			createDriver: async (driver) => {
 				if (hasFleetApi()) {
-					const createdDriver = await fleetApi.createDriver(driver)
-					setDrivers((current) => [...current, createdDriver])
+					await fleetApi.createDriver(driver)
+					await refreshWorkspace()
 					return
 				}
 
-				setDrivers((current) => [
-					...current,
-					{
-						...driver,
-						id: nextId('driver'),
-						monthlySpend: 0,
-						personalSpend: 0,
-					},
-				])
+				const createdDriver = {
+					...driver,
+					id: nextId('driver'),
+					monthlySpend: 0,
+					personalSpend: 0,
+				}
+				setDrivers((current) => applyDriverAssignment([...current, createdDriver], createdDriver))
+				setVehicles((current) => applyDriverToVehicles(current, createdDriver))
 			},
 			createVehicle: async (vehicle) => {
 				if (hasFleetApi()) {
-					const createdVehicle = await fleetApi.createVehicle(vehicle)
-					setVehicles((current) => [...current, createdVehicle])
+					await fleetApi.createVehicle(vehicle)
+					await refreshWorkspace()
 					return
 				}
 
-				setVehicles((current) => [
-					...current,
-					{
-						...vehicle,
-						id: nextId('vehicle'),
-						monthlySpend: 0,
-					},
-				])
+				const createdVehicle = {
+					...vehicle,
+					id: nextId('vehicle'),
+					monthlySpend: 0,
+				}
+				setDrivers((current) => assignVehicleDriver(current, createdVehicle))
+				setVehicles((current) => [...current, createdVehicle])
 			},
 			updateDriver: async (driver) => {
 				if (hasFleetApi()) {
 					await fleetApi.updateDriver(driver)
+					await refreshWorkspace()
+					return
 				}
-				setDrivers((current) => current.map((item) => (item.id === driver.id ? driver : item)))
+				setDrivers((current) => applyDriverAssignment(current, driver))
+				setVehicles((current) => applyDriverToVehicles(current, driver))
 			},
 			updateVehicle: async (vehicle) => {
 				if (hasFleetApi()) {
 					await fleetApi.updateVehicle(vehicle)
+					await refreshWorkspace()
+					return
 				}
+				setDrivers((current) => assignVehicleDriver(current, vehicle))
 				setVehicles((current) => current.map((item) => (item.id === vehicle.id ? vehicle : item)))
 			},
 			toggleService: async (serviceId) => {

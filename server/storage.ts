@@ -48,6 +48,46 @@ function readDatabase(databasePath: string) {
 	}
 }
 
+function applyDriverAssignment(drivers: Driver[], driver: Driver) {
+	return drivers.map((item) => {
+		if (item.id === driver.id) {
+			return driver
+		}
+		if (driver.vehicleId && item.vehicleId === driver.vehicleId) {
+			return { ...item, vehicleId: '' }
+		}
+		return item
+	})
+}
+
+function assignVehicleDriver(drivers: Driver[], vehicle: Vehicle) {
+	if (!vehicle.assignedDriverId) {
+		return drivers.map((driver) => (driver.vehicleId === vehicle.id ? { ...driver, vehicleId: '' } : driver))
+	}
+
+	return drivers.map((driver) => {
+		if (driver.id === vehicle.assignedDriverId) {
+			return { ...driver, vehicleId: vehicle.id }
+		}
+		if (driver.vehicleId === vehicle.id) {
+			return { ...driver, vehicleId: '' }
+		}
+		return driver
+	})
+}
+
+function applyDriverToVehicles(vehicles: Vehicle[], driver: Driver) {
+	return vehicles.map((vehicle) => {
+		if (driver.vehicleId && vehicle.id === driver.vehicleId) {
+			return { ...vehicle, assignedDriverId: driver.id }
+		}
+		if (vehicle.assignedDriverId === driver.id) {
+			return { ...vehicle, assignedDriverId: '' }
+		}
+		return vehicle
+	})
+}
+
 export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'server/.data/fleet-db.json')) {
 	let database = readDatabase(path)
 
@@ -57,7 +97,8 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 		createDriver: async (driver: Driver) => {
 			database = {
 				...database,
-				drivers: [...database.drivers, driver],
+				drivers: applyDriverAssignment([...database.drivers, driver], driver),
+				vehicles: applyDriverToVehicles(database.vehicles, driver),
 			}
 			writeDatabase(path, database)
 			return driver
@@ -65,6 +106,7 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 		createVehicle: async (vehicle: Vehicle) => {
 			database = {
 				...database,
+				drivers: assignVehicleDriver(database.drivers, vehicle),
 				vehicles: [...database.vehicles, vehicle],
 			}
 			writeDatabase(path, database)
@@ -89,13 +131,14 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			let updatedDriver: Driver | undefined
 			database = {
 				...database,
-				drivers: database.drivers.map((item) => {
+				drivers: applyDriverAssignment(database.drivers.map((item) => {
 					if (item.id !== driver.id) {
 						return item
 					}
 					updatedDriver = driver
 					return driver
-				}),
+				}), driver),
+				vehicles: applyDriverToVehicles(database.vehicles, driver),
 			}
 			writeDatabase(path, database)
 			return updatedDriver
@@ -104,6 +147,7 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			let updatedVehicle: Vehicle | undefined
 			database = {
 				...database,
+				drivers: assignVehicleDriver(database.drivers, vehicle),
 				vehicles: database.vehicles.map((item) => {
 					if (item.id !== vehicle.id) {
 						return item

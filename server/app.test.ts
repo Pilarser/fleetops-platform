@@ -68,6 +68,16 @@ async function login(email = 'admin@example.com') {
 	return payload.token
 }
 
+async function getWorkspace(token: string) {
+	const response = await fetch(`${baseUrl}/api/workspace`, {
+		headers: {
+			authorization: `Bearer ${token}`,
+		},
+	})
+	assert.equal(response.status, 200)
+	return (await response.json()) as Awaited<ReturnType<typeof store.getWorkspace>>
+}
+
 describe('fleet API', () => {
 	it('rejects unauthenticated workspace access', async () => {
 		const response = await fetch(`${baseUrl}/api/workspace`)
@@ -127,6 +137,108 @@ describe('fleet API', () => {
 
 		assert.equal(response.status, 201)
 		assert.ok((await store.getWorkspace()).drivers.some((driver) => driver.email === 'backend.test@example.com'))
+	})
+
+	it('moves a vehicle assignment from the previous driver to the selected driver', async () => {
+		const token = await login()
+		const workspace = await getWorkspace(token)
+		const vehicle = workspace.vehicles.find((item) => item.id === 'vehicle-1')
+		assert.ok(vehicle)
+
+		const response = await fetch(`${baseUrl}/api/vehicles/${vehicle.id}`, {
+			method: 'PATCH',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				...vehicle,
+				assignedDriverId: 'driver-2',
+			}),
+		})
+		assert.equal(response.status, 200)
+
+		const updatedWorkspace = await getWorkspace(token)
+		assert.equal(updatedWorkspace.drivers.find((driver) => driver.id === 'driver-1')?.vehicleId, '')
+		assert.equal(updatedWorkspace.drivers.find((driver) => driver.id === 'driver-2')?.vehicleId, 'vehicle-1')
+		assert.equal(updatedWorkspace.vehicles.find((item) => item.id === 'vehicle-1')?.assignedDriverId, 'driver-2')
+	})
+
+	it('moves a driver assignment away from the previous driver for the vehicle', async () => {
+		const token = await login()
+		const workspace = await getWorkspace(token)
+		const driver = workspace.drivers.find((item) => item.id === 'driver-1')
+		const vehicle = workspace.vehicles.find((item) => item.id === 'vehicle-2')
+		assert.ok(driver)
+		assert.ok(vehicle)
+
+		const preconditionResponse = await fetch(`${baseUrl}/api/vehicles/${vehicle.id}`, {
+			method: 'PATCH',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				...vehicle,
+				assignedDriverId: 'driver-2',
+			}),
+		})
+		assert.equal(preconditionResponse.status, 200)
+
+		const response = await fetch(`${baseUrl}/api/drivers/${driver.id}`, {
+			method: 'PATCH',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				...driver,
+				vehicleId: 'vehicle-2',
+			}),
+		})
+		assert.equal(response.status, 200)
+
+		const updatedWorkspace = await getWorkspace(token)
+		assert.equal(updatedWorkspace.drivers.find((item) => item.id === 'driver-1')?.vehicleId, 'vehicle-2')
+		assert.equal(updatedWorkspace.drivers.find((item) => item.id === 'driver-2')?.vehicleId, '')
+		assert.equal(updatedWorkspace.vehicles.find((item) => item.id === 'vehicle-2')?.assignedDriverId, 'driver-1')
+	})
+
+	it('allows vehicles to be unassigned', async () => {
+		const token = await login()
+		const workspace = await getWorkspace(token)
+		const vehicle = workspace.vehicles.find((item) => item.id === 'vehicle-1')
+		assert.ok(vehicle)
+
+		const preconditionResponse = await fetch(`${baseUrl}/api/vehicles/${vehicle.id}`, {
+			method: 'PATCH',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				...vehicle,
+				assignedDriverId: 'driver-1',
+			}),
+		})
+		assert.equal(preconditionResponse.status, 200)
+
+		const response = await fetch(`${baseUrl}/api/vehicles/${vehicle.id}`, {
+			method: 'PATCH',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				...vehicle,
+				assignedDriverId: '',
+			}),
+		})
+		assert.equal(response.status, 200)
+
+		const updatedWorkspace = await getWorkspace(token)
+		assert.equal(updatedWorkspace.drivers.find((driver) => driver.id === 'driver-1')?.vehicleId, '')
+		assert.equal(updatedWorkspace.vehicles.find((item) => item.id === 'vehicle-1')?.assignedDriverId, '')
 	})
 
 	it('blocks driver role from admin workspace access', async () => {

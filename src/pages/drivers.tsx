@@ -132,7 +132,7 @@ function DriverDialog({
 }) {
 	const [form, setForm] = useState<DriverFormState>({
 		...(driver ?? emptyDriverForm),
-		vehicleId: driver?.vehicleId ?? vehicles[0]?.id ?? '',
+		vehicleId: driver?.vehicleId ?? '',
 	})
 
 	function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -161,6 +161,7 @@ function DriverDialog({
 				</Field>
 				<Field label="Vehicle">
 					<SelectInput value={form.vehicleId} onChange={(event) => setForm({ ...form, vehicleId: event.target.value })}>
+						<option value="">Unassigned</option>
 						{vehicles.map((vehicle) => (
 							<option key={vehicle.id} value={vehicle.id}>
 								{vehicle.plate} - {vehicle.make} {vehicle.model}
