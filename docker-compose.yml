@@ -1,13 +1,13 @@
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     container_name: fleetops-postgres
     environment:
       POSTGRES_DB: fleetops
       POSTGRES_USER: fleetops
       POSTGRES_PASSWORD: fleetops
     ports:
-      - "5432:5432"
+      - "55433:5432"
     volumes:
       - fleetops-postgres-data:/var/lib/postgresql/data
     healthcheck:
