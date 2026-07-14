@@ -26,7 +26,7 @@ The first web MVP focuses on the fleet manager portal:
 - Provider coverage preview
 - Monthly reporting view
 
-All data is currently seeded in `src/data/mock-data.ts`. This keeps the UI productive while the backend API and real integrations are designed.
+Demo data is seeded from `src/data/mock-data.ts`. When the local API runs, mutable data is persisted to `server/.data/fleet-db.json`.
 
 ## Suggested Architecture
 
@@ -77,7 +77,7 @@ Start the frontend in another terminal:
 VITE_API_URL=http://127.0.0.1:4000/api pnpm dev
 ```
 
-The API currently stores data in memory. Restarting `pnpm api` resets the demo data.
+The API stores mutable demo data in `server/.data/fleet-db.json`. Delete that file to reset to seeded data.
 
 ## Demo Login
 
