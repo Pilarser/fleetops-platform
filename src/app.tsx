@@ -8,9 +8,25 @@ import { ReportsPage } from './pages/reports'
 import { ServicesPage } from './pages/services'
 import { TransactionsPage } from './pages/transactions'
 import { VehiclesPage } from './pages/vehicles'
+import { LoginPage } from './pages/login'
+import { AuthProvider, useAuth } from './state/auth'
 import { FleetWorkspaceProvider } from './state/fleet-workspace'
 
 export default function App() {
+	return (
+		<AuthProvider>
+			<AuthenticatedApp />
+		</AuthProvider>
+	)
+}
+
+function AuthenticatedApp() {
+	const { isAuthenticated } = useAuth()
+
+	if (!isAuthenticated) {
+		return <LoginPage />
+	}
+
 	return (
 		<FleetWorkspaceProvider>
 			<AppShell>

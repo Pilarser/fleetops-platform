@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
+import { Button } from './ui'
+import { useAuth } from '../state/auth'
 
 const navItems = [
 	{ to: '/', label: 'Dashboard', icon: Gauge },
@@ -22,6 +24,8 @@ const navItems = [
 ]
 
 export function AppShell({ children }: { children: ReactNode }) {
+	const { logout, user } = useAuth()
+
 	return (
 		<div className="app-shell">
 			<aside className="sidebar">
@@ -52,14 +56,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 				<header className="topbar">
 					<div>
 						<span className="topbar-label">Workspace</span>
-						<strong>Acme Italia Fleet</strong>
+						<strong>{user?.companyName ?? 'Fleet workspace'}</strong>
 					</div>
 					<div className="topbar-user">
-						<span>FM</span>
+						<span>{user?.name.split(' ').map((part) => part[0]).join('').slice(0, 2) ?? 'U'}</span>
 						<div>
-							<strong>Fleet Manager</strong>
-							<small>admin@example.com</small>
+							<strong>{user?.name}</strong>
+							<small>{user?.role.replace('_', ' ')} - {user?.email}</small>
 						</div>
+						<Button type="button" variant="secondary" onClick={logout}>
+							Logout
+						</Button>
 					</div>
 				</header>
 				<main className="content">{children}</main>

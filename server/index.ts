@@ -1,12 +1,15 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { randomUUID } from 'node:crypto'
+import { demoUsers } from '../src/data/demo-users'
 import { drivers as seedDrivers, providers, services as seedServices, transactions, vehicles as seedVehicles } from '../src/data/mock-data'
-import type { Driver, MobilityService, Vehicle } from '../src/types'
+import type { Driver, MobilityService, SessionUser, Vehicle } from '../src/types'
 
 const port = Number(process.env.PORT ?? 4000)
 
 let drivers = structuredClone(seedDrivers)
 let services = structuredClone(seedServices)
 let vehicles = structuredClone(seedVehicles)
+const sessions = new Map<string, SessionUser>()
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now()}`
@@ -14,7 +17,7 @@ function nextId(prefix: string) {
 
 function sendJson(response: ServerResponse, statusCode: number, payload: unknown) {
 	response.writeHead(statusCode, {
-		'access-control-allow-headers': 'content-type',
+		'access-control-allow-headers': 'content-type, authorization',
 		'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
 		'access-control-allow-origin': '*',
 		'content-type': 'application/json',
@@ -54,6 +57,38 @@ function workspacePayload() {
 	}
 }
 
+function publicUser(user: (typeof demoUsers)[number]): SessionUser {
+	return {
+		id: user.id,
+		name: user.name,
+		email: user.email,
+		role: user.role,
+		companyName: user.companyName,
+	}
+}
+
+function createToken() {
+	return `demo-token-${randomUUID()}`
+}
+
+function getBearerToken(request: IncomingMessage) {
+	const authorization = request.headers.authorization
+	if (!authorization?.startsWith('Bearer ')) {
+		return undefined
+	}
+	return authorization.replace('Bearer ', '')
+}
+
+function requireUser(request: IncomingMessage, response: ServerResponse) {
+	const token = getBearerToken(request)
+	const user = token ? sessions.get(token) : undefined
+	if (!user) {
+		sendJson(response, 401, { message: 'Authentication required' })
+		return undefined
+	}
+	return user
+}
+
 createServer(async (request, response) => {
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
 	const method = request.method ?? 'GET'
@@ -69,12 +104,45 @@ createServer(async (request, response) => {
 			return
 		}
 
+		if (method === 'POST' && url.pathname === '/api/auth/login') {
+			const payload = (await readBody(request)) as { email?: string; password?: string }
+			const user = demoUsers.find(
+				(demoUser) => demoUser.email === payload.email?.trim().toLowerCase() && demoUser.password === payload.password,
+			)
+
+			if (!user) {
+				sendJson(response, 401, { message: 'Invalid email or password' })
+				return
+			}
+
+			const token = createToken()
+			const sessionUser = publicUser(user)
+			sessions.set(token, sessionUser)
+			sendJson(response, 200, { token, user: sessionUser })
+			return
+		}
+
+		if (method === 'GET' && url.pathname === '/api/auth/me') {
+			const user = requireUser(request, response)
+			if (!user) {
+				return
+			}
+			sendJson(response, 200, user)
+			return
+		}
+
 		if (method === 'GET' && url.pathname === '/api/workspace') {
+			if (!requireUser(request, response)) {
+				return
+			}
 			sendJson(response, 200, workspacePayload())
 			return
 		}
 
 		if (method === 'POST' && url.pathname === '/api/drivers') {
+			if (!requireUser(request, response)) {
+				return
+			}
 			const payload = (await readBody(request)) as Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>
 			const driver: Driver = {
 				...payload,
@@ -88,6 +156,9 @@ createServer(async (request, response) => {
 		}
 
 		if (method === 'PATCH' && url.pathname.startsWith('/api/drivers/')) {
+			if (!requireUser(request, response)) {
+				return
+			}
 			const id = decodeURIComponent(url.pathname.replace('/api/drivers/', ''))
 			const payload = (await readBody(request)) as Driver
 			drivers = drivers.map((driver) => (driver.id === id ? { ...payload, id } : driver))
@@ -96,6 +167,9 @@ createServer(async (request, response) => {
 		}
 
 		if (method === 'POST' && url.pathname === '/api/vehicles') {
+			if (!requireUser(request, response)) {
+				return
+			}
 			const payload = (await readBody(request)) as Omit<Vehicle, 'id' | 'monthlySpend'>
 			const vehicle: Vehicle = {
 				...payload,
@@ -108,6 +182,9 @@ createServer(async (request, response) => {
 		}
 
 		if (method === 'PATCH' && url.pathname.startsWith('/api/vehicles/')) {
+			if (!requireUser(request, response)) {
+				return
+			}
 			const id = decodeURIComponent(url.pathname.replace('/api/vehicles/', ''))
 			const payload = (await readBody(request)) as Vehicle
 			vehicles = vehicles.map((vehicle) => (vehicle.id === id ? { ...payload, id } : vehicle))
@@ -116,6 +193,9 @@ createServer(async (request, response) => {
 		}
 
 		if (method === 'PATCH' && url.pathname.startsWith('/api/services/')) {
+			if (!requireUser(request, response)) {
+				return
+			}
 			const id = decodeURIComponent(url.pathname.replace('/api/services/', '')) as MobilityService['id']
 			services = services.map((service) => (service.id === id ? { ...service, enabled: !service.enabled } : service))
 			sendJson(response, 200, services.find((service) => service.id === id))

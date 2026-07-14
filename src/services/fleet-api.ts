@@ -1,4 +1,4 @@
-import type { Driver, MobilityService, ProviderLocation, Transaction, Vehicle } from '../types'
+import type { Driver, MobilityService, ProviderLocation, SessionUser, Transaction, Vehicle } from '../types'
 
 export interface FleetWorkspacePayload {
 	drivers: Driver[]
@@ -9,6 +9,7 @@ export interface FleetWorkspacePayload {
 }
 
 const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '')
+let authToken = localStorage.getItem('fleetos.session.token')
 
 export function hasFleetApi() {
 	return Boolean(apiBaseUrl)
@@ -23,6 +24,7 @@ async function request<T>(path: string, options?: RequestInit) {
 		...options,
 		headers: {
 			'content-type': 'application/json',
+			...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
 			...options?.headers,
 		},
 	})
@@ -35,6 +37,15 @@ async function request<T>(path: string, options?: RequestInit) {
 }
 
 export const fleetApi = {
+	setToken: (token: string | null) => {
+		authToken = token
+	},
+	login: (credentials: { email: string; password: string }) =>
+		request<{ token: string; user: SessionUser }>('/auth/login', {
+			method: 'POST',
+			body: JSON.stringify(credentials),
+		}),
+	me: () => request<SessionUser>('/auth/me'),
 	getWorkspace: () => request<FleetWorkspacePayload>('/workspace'),
 	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>) =>
 		request<Driver>('/drivers', {

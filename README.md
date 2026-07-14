@@ -78,3 +78,15 @@ VITE_API_URL=http://127.0.0.1:4000/api pnpm dev
 ```
 
 The API currently stores data in memory. Restarting `pnpm api` resets the demo data.
+
+## Demo Login
+
+Use one of these accounts:
+
+```text
+admin@example.com / demo1234
+finance@example.com / demo1234
+driver@example.com / demo1234
+```
+
+When `VITE_API_URL` is configured, login uses the local API. Without `VITE_API_URL`, the static GitHub Pages demo uses the same demo users locally in the browser.

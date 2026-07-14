@@ -6,6 +6,16 @@ export type VehicleStatus = 'active' | 'maintenance' | 'inactive'
 
 export type DriverStatus = 'active' | 'suspended'
 
+export type UserRole = 'fleet_admin' | 'manager' | 'finance' | 'driver' | 'support'
+
+export interface SessionUser {
+	id: string
+	name: string
+	email: string
+	role: UserRole
+	companyName: string
+}
+
 export interface Vehicle {
 	id: string
 	plate: string
