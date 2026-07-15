@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Redirecting...</title>
+		<script>
+			;(function () {
+				var base = '/fleetops-platform/'
+				var path = window.location.pathname
+				var route = path.indexOf(base) === 0 ? path.slice(base.length) : path.replace(/^\/+/, '')
+				var nextPath = route ? base + '#/' + route : base
+				window.location.replace(nextPath + window.location.search + window.location.hash)
+			})()
+		</script>
+	</head>
+	<body>Redirecting...</body>
+</html>
