@@ -24,7 +24,10 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 
 		try {
 			if (method === 'GET' && url.pathname === '/api/health') {
-				sendJson(response, 200, { databasePath: store.path, ok: true })
+				sendJson(response, 200, {
+					ok: true,
+					service: 'fleet-api',
+				})
 				return
 			}
 

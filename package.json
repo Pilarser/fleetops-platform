@@ -6,6 +6,8 @@
 	"packageManager": "pnpm@11.11.0",
 	"scripts": {
 		"api": "tsx server/index.ts",
+		"api:start": "tsx server/index.ts",
+		"db:deploy": "prisma migrate deploy",
 		"db:generate": "prisma generate",
 		"db:migrate": "prisma migrate dev",
 		"db:reset": "prisma migrate reset",
@@ -29,6 +31,7 @@
 		"react": "^19.2.4",
 		"react-dom": "^19.2.4",
 		"react-router-dom": "^7.11.0",
+		"tsx": "^4.22.0",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
@@ -38,7 +41,6 @@
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react-swc": "^4.2.3",
 		"prisma": "^7.8.0",
-		"tsx": "^4.22.0",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.1"
 	}
