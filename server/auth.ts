@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { demoUsers } from '../src/data/demo-users'
 import type { SessionUser, UserRole } from '../src/types'
 import { sendJson } from './http'
 import { verifyPassword } from './passwords'
@@ -18,12 +19,18 @@ function isUserRole(role: string): role is UserRole {
 }
 
 export async function findUserByCredentials(email: string, password: string) {
+	const normalizedEmail = email.trim().toLowerCase()
 	const user = await prisma.user.findUnique({
 		include: { company: true },
-		where: { email: email.trim().toLowerCase() },
+		where: { email: normalizedEmail },
 	})
 
-	if (!user || !user.password || !verifyPassword(password, user.password) || !isUserRole(user.role)) {
+	const isExplicitLocalDemo =
+		process.env.ALLOW_DEMO_AUTH === 'true' &&
+		demoUsers.some((demoUser) => demoUser.email === normalizedEmail && demoUser.password === password)
+	const hasValidPassword = Boolean(user?.password && verifyPassword(password, user.password))
+
+	if (!user || (!hasValidPassword && !isExplicitLocalDemo) || !isUserRole(user.role)) {
 		return undefined
 	}
 
