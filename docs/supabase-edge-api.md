@@ -2,6 +2,8 @@
 
 The production frontend uses one Supabase Edge Function as its API. Supabase Postgres remains the source of truth, and the service-role database connection is available only inside the function.
 
+All public tables have Row Level Security enabled without browser-facing policies. The GitHub Pages frontend must use the Edge API; the Supabase publishable key alone cannot read or mutate fleet tables.
+
 ## One-time setup
 
 Log the Supabase CLI into your account and link this repository to the existing project:
