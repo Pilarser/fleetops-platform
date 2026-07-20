@@ -406,6 +406,109 @@ a {
 	margin-bottom: 18px;
 }
 
+.setup-panel {
+	margin-bottom: 18px;
+}
+
+.setup-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+	padding: 18px;
+	border-bottom: 1px solid #edf1f5;
+}
+
+.setup-heading h2,
+.setup-heading p {
+	margin: 0;
+}
+
+.setup-heading h2 {
+	font-size: 17px;
+}
+
+.setup-heading p {
+	margin-top: 4px;
+	color: #667085;
+	font-size: 13px;
+}
+
+.setup-progress {
+	width: min(240px, 35%);
+	height: 7px;
+	overflow: hidden;
+	border-radius: 4px;
+	background: #e8edf2;
+}
+
+.setup-progress span {
+	display: block;
+	height: 100%;
+	background: #238b74;
+	transition: width 180ms ease;
+}
+
+.setup-steps {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.setup-step {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: start;
+	gap: 10px;
+	min-width: 0;
+	padding: 16px 18px;
+	border-right: 1px solid #edf1f5;
+}
+
+.setup-step:last-child {
+	border-right: 0;
+}
+
+.setup-step > svg {
+	margin-top: 2px;
+	color: #98a2b3;
+}
+
+.setup-step-complete > svg {
+	padding: 2px;
+	border-radius: 50%;
+	background: #dff5ec;
+	color: #18745f;
+}
+
+.setup-step div {
+	display: grid;
+	gap: 3px;
+	min-width: 0;
+}
+
+.setup-step strong,
+.setup-step span {
+	overflow-wrap: anywhere;
+}
+
+.setup-step span {
+	color: #667085;
+	font-size: 12px;
+}
+
+.setup-action {
+	grid-column: 2;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: fit-content;
+	margin-top: 9px;
+	color: #176b5b;
+	font-size: 13px;
+	font-weight: 750;
+	text-decoration: none;
+}
+
 .metric-card {
 	display: flex;
 	gap: 14px;
@@ -935,6 +1038,18 @@ tr:last-child td {
 		grid-template-columns: 1fr;
 	}
 
+	.setup-steps {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.setup-step:nth-child(2) {
+		border-right: 0;
+	}
+
+	.setup-step:nth-child(-n + 2) {
+		border-bottom: 1px solid #edf1f5;
+	}
+
 	.toolbar {
 		align-items: stretch;
 		flex-direction: column;
@@ -971,6 +1086,33 @@ tr:last-child td {
 
 	.page-header {
 		display: grid;
+	}
+
+	.page-actions {
+		flex-wrap: wrap;
+	}
+
+	.setup-heading {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.setup-progress {
+		width: 100%;
+	}
+
+	.setup-steps {
+		grid-template-columns: 1fr;
+	}
+
+	.setup-step,
+	.setup-step:nth-child(2) {
+		border-right: 0;
+		border-bottom: 1px solid #edf1f5;
+	}
+
+	.setup-step:last-child {
+		border-bottom: 0;
 	}
 
 	.report-row {

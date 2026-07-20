@@ -1,5 +1,6 @@
 import { type FormEvent, useMemo, useState } from 'react'
 import { Check, Download, Plus, X } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import {
 	Badge,
 	Button,
@@ -49,11 +50,12 @@ function csvCell(value: string | number) {
 export function TransactionsPage() {
 	const { user } = useAuth()
 	const { createTransaction, drivers, services, transactions, updateTransaction, vehicles } = useFleetWorkspace()
+	const [searchParams, setSearchParams] = useSearchParams()
 	const [query, setQuery] = useState('')
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 	const [serviceFilter, setServiceFilter] = useState<ServiceFilter>('all')
 	const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
-	const [isCreateOpen, setIsCreateOpen] = useState(false)
+	const [isCreateOpen, setIsCreateOpen] = useState(searchParams.get('create') === '1')
 	const [draft, setDraft] = useState<TransactionDraft>(emptyDraft)
 	const [createError, setCreateError] = useState<string | null>(null)
 	const [isCreating, setIsCreating] = useState(false)
@@ -93,6 +95,13 @@ export function TransactionsPage() {
 		setIsCreateOpen(true)
 	}
 
+	function closeCreateDialog() {
+		setIsCreateOpen(false)
+		if (searchParams.has('create')) {
+			setSearchParams({}, { replace: true })
+		}
+	}
+
 	function openDetails(transaction: Transaction) {
 		setSelectedTransaction(transaction)
 		setReviewExpenseType(transaction.expenseType)
@@ -115,7 +124,7 @@ export function TransactionsPage() {
 		setIsCreating(true)
 		try {
 			const created = await createTransaction(draft)
-			setIsCreateOpen(false)
+			closeCreateDialog()
 			openDetails(created)
 		} catch (error) {
 			setCreateError(error instanceof Error ? error.message : 'Unable to create the transaction')
@@ -243,7 +252,7 @@ export function TransactionsPage() {
 			</Card>
 
 			{isCreateOpen ? (
-				<Dialog title="Add transaction" onClose={() => setIsCreateOpen(false)}>
+				<Dialog title="Add transaction" onClose={closeCreateDialog}>
 					<form className="form-grid" onSubmit={handleCreate}>
 						<Field label="Date">
 							<TextInput type="date" required value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} />
@@ -286,7 +295,7 @@ export function TransactionsPage() {
 						</Field>
 						{createError ? <p className="form-error">{createError}</p> : null}
 						<div className="form-actions">
-							<Button type="button" variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+							<Button type="button" variant="secondary" onClick={closeCreateDialog}>Cancel</Button>
 							<Button type="submit" disabled={isCreating}>{isCreating ? 'Saving...' : 'Save transaction'}</Button>
 						</div>
 					</form>

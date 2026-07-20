@@ -93,11 +93,12 @@ export function Toolbar({ children }: { children: ReactNode }) {
 	return <div className="toolbar">{children}</div>
 }
 
-export function EmptyState({ title, detail }: { title: string; detail: string }) {
+export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
 	return (
 		<div className="empty-state">
 			<strong>{title}</strong>
 			<span>{detail}</span>
+			{action}
 		</div>
 	)
 }

@@ -1,14 +1,51 @@
-import { AlertTriangle, Car, CreditCard, Users, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Car, Check, Circle, CreditCard, Users, Zap } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { formatCurrency } from '../data/formatters'
 import { Badge, Card, MetricCard, PageHeader, Table } from '../components/ui'
 import { getDriverName, getServiceLabel, getVehiclePlate, statusTone } from './helpers'
 import { useFleetWorkspace } from '../state/fleet-workspace'
 
 export function DashboardPage() {
-	const { drivers, services, transactions, vehicles } = useFleetWorkspace()
+	const { drivers, isLoading, services, transactions, vehicles } = useFleetWorkspace()
 	const monthlySpend = transactions.reduce((total, transaction) => total + transaction.amount, 0)
 	const pendingTransactions = transactions.filter((transaction) => transaction.status === 'pending').length
 	const enabledServices = services.filter((service) => service.enabled).length
+	const hasVehicle = vehicles.length > 0
+	const hasAssignedDriver = drivers.some((driver) => Boolean(driver.vehicleId))
+	const hasEnabledService = enabledServices > 0
+	const hasTransaction = transactions.length > 0
+	const setupSteps = [
+		{
+			complete: hasVehicle,
+			label: 'Add a vehicle',
+			detail: hasVehicle ? `${vehicles.length} in fleet` : 'Fleet inventory',
+			to: '/vehicles?create=1',
+			action: 'Add vehicle',
+		},
+		{
+			complete: hasAssignedDriver,
+			label: 'Assign a driver',
+			detail: hasAssignedDriver ? 'Vehicle assignment active' : drivers.length > 0 ? 'Assignment required' : 'Driver roster',
+			to: drivers.length > 0 ? '/drivers' : '/drivers?create=1',
+			action: drivers.length > 0 ? 'Assign vehicle' : 'Add driver',
+		},
+		{
+			complete: hasEnabledService,
+			label: 'Enable mobility services',
+			detail: `${enabledServices} enabled`,
+			to: '/services',
+			action: 'Review services',
+		},
+		{
+			complete: hasTransaction,
+			label: 'Record a transaction',
+			detail: hasTransaction ? `${transactions.length} recorded` : 'Start the ledger',
+			to: '/transactions?create=1',
+			action: 'Add transaction',
+		},
+	]
+	const completedSetupSteps = setupSteps.filter((step) => step.complete).length
+	const nextSetupStep = setupSteps.findIndex((step) => !step.complete)
 
 	return (
 		<>
@@ -16,6 +53,36 @@ export function DashboardPage() {
 				title="Fleet dashboard"
 				description="Monitor mobility spend, active vehicles, driver usage, and pending actions."
 			/>
+
+			{!isLoading && completedSetupSteps < setupSteps.length ? (
+				<Card className="setup-panel">
+					<div className="setup-heading">
+						<div>
+							<h2>Workspace setup</h2>
+							<p>{completedSetupSteps} of {setupSteps.length} complete</p>
+						</div>
+						<div className="setup-progress" aria-label={`${completedSetupSteps} of ${setupSteps.length} setup steps complete`}>
+							<span style={{ width: `${(completedSetupSteps / setupSteps.length) * 100}%` }} />
+						</div>
+					</div>
+					<div className="setup-steps">
+						{setupSteps.map((step, index) => (
+							<div className={`setup-step${step.complete ? ' setup-step-complete' : ''}`} key={step.label}>
+								{step.complete ? <Check size={17} /> : <Circle size={17} />}
+								<div>
+									<strong>{step.label}</strong>
+									<span>{step.detail}</span>
+								</div>
+								{!step.complete && index === nextSetupStep ? (
+									<Link className="setup-action" to={step.to}>
+										{step.action} <ArrowRight size={15} />
+									</Link>
+								) : null}
+							</div>
+						))}
+					</div>
+				</Card>
+			) : null}
 
 			<div className="metrics-grid">
 				<MetricCard

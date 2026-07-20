@@ -1,4 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput, Toolbar } from '../components/ui'
 import { formatCurrency, formatNumber } from '../data/formatters'
 import { useFleetWorkspace } from '../state/fleet-workspace'
@@ -20,9 +22,17 @@ const emptyVehicleForm: VehicleFormState = {
 
 export function VehiclesPage() {
 	const { createVehicle, drivers, updateVehicle, vehicles } = useFleetWorkspace()
+	const [searchParams, setSearchParams] = useSearchParams()
 	const [query, setQuery] = useState('')
 	const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null)
-	const [isCreating, setIsCreating] = useState(false)
+	const [isCreating, setIsCreating] = useState(searchParams.get('create') === '1')
+
+	function closeCreateDialog() {
+		setIsCreating(false)
+		if (searchParams.has('create')) {
+			setSearchParams({}, { replace: true })
+		}
+	}
 
 	const filteredVehicles = useMemo(() => {
 		const normalized = query.trim().toLowerCase()
@@ -45,7 +55,7 @@ export function VehiclesPage() {
 				description="Track assigned drivers, fuel type, cost center, mileage, and monthly mobility spend."
 				actions={
 					<Button type="button" onClick={() => setIsCreating(true)}>
-						Add vehicle
+						<Plus size={16} /> Add vehicle
 					</Button>
 				}
 			/>
@@ -88,7 +98,11 @@ export function VehiclesPage() {
 						)}
 					/>
 				) : (
-					<EmptyState title="No vehicles found" detail="Adjust the search terms or add a new vehicle." />
+					<EmptyState
+						title="No vehicles found"
+						detail="Add the first vehicle to start this fleet."
+						action={<Button type="button" onClick={() => setIsCreating(true)}><Plus size={16} /> Add vehicle</Button>}
+					/>
 				)}
 			</Card>
 
@@ -96,10 +110,10 @@ export function VehiclesPage() {
 				<VehicleDialog
 					drivers={drivers}
 					title="Add vehicle"
-					onClose={() => setIsCreating(false)}
+					onClose={closeCreateDialog}
 					onSubmit={(vehicle) => {
 						createVehicle(vehicle)
-						setIsCreating(false)
+						closeCreateDialog()
 					}}
 				/>
 			) : null}

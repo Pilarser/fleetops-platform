@@ -1,4 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput, Toolbar } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
 import { useFleetWorkspace } from '../state/fleet-workspace'
@@ -17,9 +19,17 @@ const emptyDriverForm: DriverFormState = {
 
 export function DriversPage() {
 	const { createDriver, drivers, updateDriver, vehicles } = useFleetWorkspace()
+	const [searchParams, setSearchParams] = useSearchParams()
 	const [query, setQuery] = useState('')
-	const [isCreating, setIsCreating] = useState(false)
+	const [isCreating, setIsCreating] = useState(searchParams.get('create') === '1')
 	const [editingDriver, setEditingDriver] = useState<Driver | null>(null)
+
+	function closeCreateDialog() {
+		setIsCreating(false)
+		if (searchParams.has('create')) {
+			setSearchParams({}, { replace: true })
+		}
+	}
 
 	const filteredDrivers = useMemo(() => {
 		const normalized = query.trim().toLowerCase()
@@ -42,7 +52,7 @@ export function DriversPage() {
 				description="Manage driver access, vehicle assignment, cost centers, and personal expense attribution."
 				actions={
 					<Button type="button" onClick={() => setIsCreating(true)}>
-						Add driver
+						<Plus size={16} /> Add driver
 					</Button>
 				}
 			/>
@@ -82,7 +92,11 @@ export function DriversPage() {
 						)}
 					/>
 				) : (
-					<EmptyState title="No drivers found" detail="Adjust the search terms or add a new driver." />
+					<EmptyState
+						title="No drivers found"
+						detail="Add a driver and assign an available vehicle."
+						action={<Button type="button" onClick={() => setIsCreating(true)}><Plus size={16} /> Add driver</Button>}
+					/>
 				)}
 			</Card>
 
@@ -90,10 +104,10 @@ export function DriversPage() {
 				<DriverDialog
 					title="Add driver"
 					vehicles={vehicles}
-					onClose={() => setIsCreating(false)}
+					onClose={closeCreateDialog}
 					onSubmit={(driver) => {
 						createDriver(driver)
-						setIsCreating(false)
+						closeCreateDialog()
 					}}
 				/>
 			) : null}
