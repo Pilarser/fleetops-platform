@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { LoaderCircle, Plus } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput, Toolbar } from '../components/ui'
 import { formatCurrency, formatNumber } from '../data/formatters'
@@ -111,8 +111,8 @@ export function VehiclesPage() {
 					drivers={drivers}
 					title="Add vehicle"
 					onClose={closeCreateDialog}
-					onSubmit={(vehicle) => {
-						createVehicle(vehicle)
+					onSubmit={async (vehicle) => {
+						await createVehicle(vehicle)
 						closeCreateDialog()
 					}}
 				/>
@@ -124,8 +124,8 @@ export function VehiclesPage() {
 					title={`Edit ${editingVehicle.plate}`}
 					vehicle={editingVehicle}
 					onClose={() => setEditingVehicle(null)}
-					onSubmit={(vehicle) => {
-						updateVehicle({
+					onSubmit={async (vehicle) => {
+						await updateVehicle({
 							...editingVehicle,
 							...vehicle,
 						})
@@ -146,7 +146,7 @@ function VehicleDialog({
 }: {
 	drivers: ReturnType<typeof useFleetWorkspace>['drivers']
 	onClose: () => void
-	onSubmit: (vehicle: VehicleFormState) => void
+	onSubmit: (vehicle: VehicleFormState) => Promise<void>
 	title: string
 	vehicle?: Vehicle
 }) {
@@ -154,17 +154,26 @@ function VehicleDialog({
 		...(vehicle ?? emptyVehicleForm),
 		assignedDriverId: vehicle?.assignedDriverId ?? '',
 	})
+	const [isSaving, setIsSaving] = useState(false)
+	const [saveError, setSaveError] = useState<string | null>(null)
 
-	function handleSubmit(event: FormEvent<HTMLFormElement>) {
+	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
-		onSubmit({
-			...form,
-			plate: form.plate.trim().toUpperCase(),
-			make: form.make.trim(),
-			model: form.model.trim(),
-			costCenter: form.costCenter.trim(),
-			mileageKm: Number(form.mileageKm),
-		})
+		setSaveError(null)
+		setIsSaving(true)
+		try {
+			await onSubmit({
+				...form,
+				plate: form.plate.trim().toUpperCase(),
+				make: form.make.trim(),
+				model: form.model.trim(),
+				costCenter: form.costCenter.trim(),
+				mileageKm: Number(form.mileageKm),
+			})
+		} catch (error) {
+			setSaveError(error instanceof Error ? error.message : 'Unable to save the vehicle')
+			setIsSaving(false)
+		}
 	}
 
 	return (
@@ -217,10 +226,14 @@ function VehicleDialog({
 					/>
 				</Field>
 				<div className="form-actions">
-					<Button type="button" variant="secondary" onClick={onClose}>
+					{saveError ? <p className="form-error">{saveError}</p> : null}
+					<Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
 						Cancel
 					</Button>
-					<Button type="submit">Save vehicle</Button>
+					<Button type="submit" disabled={isSaving}>
+						{isSaving ? <LoaderCircle className="spinner" size={16} /> : null}
+						{isSaving ? 'Saving...' : 'Save vehicle'}
+					</Button>
 				</div>
 			</form>
 		</Dialog>

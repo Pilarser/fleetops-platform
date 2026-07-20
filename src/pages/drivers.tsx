@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { LoaderCircle, Plus } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput, Toolbar } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
@@ -105,8 +105,8 @@ export function DriversPage() {
 					title="Add driver"
 					vehicles={vehicles}
 					onClose={closeCreateDialog}
-					onSubmit={(driver) => {
-						createDriver(driver)
+					onSubmit={async (driver) => {
+						await createDriver(driver)
 						closeCreateDialog()
 					}}
 				/>
@@ -118,8 +118,8 @@ export function DriversPage() {
 					title={`Edit ${editingDriver.name}`}
 					vehicles={vehicles}
 					onClose={() => setEditingDriver(null)}
-					onSubmit={(driver) => {
-						updateDriver({
+					onSubmit={async (driver) => {
+						await updateDriver({
 							...editingDriver,
 							...driver,
 						})
@@ -140,7 +140,7 @@ function DriverDialog({
 }: {
 	driver?: Driver
 	onClose: () => void
-	onSubmit: (driver: DriverFormState) => void
+	onSubmit: (driver: DriverFormState) => Promise<void>
 	title: string
 	vehicles: ReturnType<typeof useFleetWorkspace>['vehicles']
 }) {
@@ -148,15 +148,24 @@ function DriverDialog({
 		...(driver ?? emptyDriverForm),
 		vehicleId: driver?.vehicleId ?? '',
 	})
+	const [isSaving, setIsSaving] = useState(false)
+	const [saveError, setSaveError] = useState<string | null>(null)
 
-	function handleSubmit(event: FormEvent<HTMLFormElement>) {
+	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
-		onSubmit({
-			...form,
-			name: form.name.trim(),
-			email: form.email.trim().toLowerCase(),
-			costCenter: form.costCenter.trim(),
-		})
+		setSaveError(null)
+		setIsSaving(true)
+		try {
+			await onSubmit({
+				...form,
+				name: form.name.trim(),
+				email: form.email.trim().toLowerCase(),
+				costCenter: form.costCenter.trim(),
+			})
+		} catch (error) {
+			setSaveError(error instanceof Error ? error.message : 'Unable to save the driver')
+			setIsSaving(false)
+		}
 	}
 
 	return (
@@ -193,10 +202,14 @@ function DriverDialog({
 					<TextInput required value={form.costCenter} onChange={(event) => setForm({ ...form, costCenter: event.target.value })} />
 				</Field>
 				<div className="form-actions">
-					<Button type="button" variant="secondary" onClick={onClose}>
+					{saveError ? <p className="form-error">{saveError}</p> : null}
+					<Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
 						Cancel
 					</Button>
-					<Button type="submit">Save driver</Button>
+					<Button type="submit" disabled={isSaving}>
+						{isSaving ? <LoaderCircle className="spinner" size={16} /> : null}
+						{isSaving ? 'Saving...' : 'Save driver'}
+					</Button>
 				</div>
 			</form>
 		</Dialog>

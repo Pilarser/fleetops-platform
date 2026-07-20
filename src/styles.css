@@ -666,6 +666,16 @@ tr:last-child td {
 	opacity: 0.55;
 }
 
+.spinner {
+	animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 .button-secondary {
 	border-color: #cfd8e3;
 	background: #fff;
@@ -792,6 +802,11 @@ tr:last-child td {
 	justify-content: flex-end;
 	gap: 10px;
 	padding-top: 4px;
+}
+
+.form-actions .form-error {
+	align-self: center;
+	margin-right: auto;
 }
 
 .form-grid > .form-error {
