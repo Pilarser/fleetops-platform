@@ -1,9 +1,8 @@
-import { createSession, parseUserRole, requireRole, requireSession, toSessionUser, verifyPassword } from './auth.ts'
+import { login, requireRole, requireSession, sessionResponse, toSessionUser } from './auth.ts'
 import {
 	createDriver,
 	createVehicle,
 	getWorkspace,
-	sql,
 	toggleService,
 	updateDriver,
 	updateVehicle,
@@ -21,14 +20,6 @@ function routePath(request: Request) {
 	return index >= 0 ? pathname.slice(index + functionName.length) || '/' : pathname
 }
 
-function sessionSecret() {
-	const secret = Deno.env.get('FLEET_SESSION_SECRET')
-	if (!secret || secret.length < 32) {
-		throw new Error('FLEET_SESSION_SECRET must contain at least 32 characters')
-	}
-	return secret
-}
-
 Deno.serve(async (request) => {
 	if (request.method === 'OPTIONS') {
 		return new Response(null, { status: 204, headers: corsHeaders })
@@ -43,31 +34,11 @@ Deno.serve(async (request) => {
 
 		if (request.method === 'POST' && path === '/auth/login') {
 			const payload = loginSchema.parse(await readJson(request))
-			const [record] = await sql`
-				select u.id, u.name, u.email, u.password, u.role, u."companyId", c.name as "companyName"
-				from "User" u
-				join "Company" c on c.id = u."companyId"
-				where lower(u.email) = ${payload.email.trim().toLowerCase()}
-				limit 1
-			`
-			const role = record ? parseUserRole(record.role) : undefined
-			if (!record || !role || !(await verifyPassword(payload.password, record.password))) {
-				throw new ApiError(401, 'Invalid email or password')
-			}
-			const user = {
-				id: record.id,
-				name: record.name,
-				email: record.email,
-				role,
-				companyName: record.companyName,
-			}
-			return json({
-				token: await createSession(user, record.companyId, sessionSecret()),
-				user,
-			})
+			const { profile, session } = await login(payload.email, payload.password)
+			return json(sessionResponse(session, profile))
 		}
 
-		const session = await requireSession(request, sessionSecret())
+		const session = await requireSession(request)
 
 		if (request.method === 'GET' && path === '/auth/me') {
 			return json(toSessionUser(session))

@@ -23,7 +23,15 @@ export default function App() {
 }
 
 function AuthenticatedApp() {
-	const { isAuthenticated } = useAuth()
+	const { isAuthenticated, isInitializing } = useAuth()
+
+	if (isInitializing) {
+		return (
+			<div className="login-shell" role="status" aria-label="Restoring session">
+				<LoaderCircle className="workspace-spinner" size={28} />
+			</div>
+		)
+	}
 
 	if (!isAuthenticated) {
 		return <LoginPage />

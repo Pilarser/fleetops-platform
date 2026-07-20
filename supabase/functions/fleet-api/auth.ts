@@ -1,4 +1,7 @@
+import { createClient, type Session } from 'supabase'
+import { sql } from './database.ts'
 import { ApiError } from './http.ts'
+import { verifyPassword } from './passwords.ts'
 
 export type UserRole = 'fleet_admin' | 'manager' | 'finance' | 'driver' | 'support'
 
@@ -10,114 +13,225 @@ export interface SessionUser {
 	companyName: string
 }
 
-export interface SessionClaims extends SessionUser {
+export interface AuthenticatedProfile extends SessionUser {
+	authUserId: string
 	companyId: string
-	exp: number
 }
 
-const encoder = new TextEncoder()
+type ProfileRecord = {
+	id: string
+	authUserId: string | null
+	companyId: string
+	name: string
+	email: string
+	password: string | null
+	role: string
+	companyName: string
+}
+
 const userRoles: UserRole[] = ['fleet_admin', 'manager', 'finance', 'driver', 'support']
 
-function encodeBase64Url(value: Uint8Array | string) {
-	const bytes = typeof value === 'string' ? encoder.encode(value) : value
-	let binary = ''
-	for (const byte of bytes) {
-		binary += String.fromCharCode(byte)
+function requiredEnv(name: string) {
+	const value = Deno.env.get(name)
+	if (!value) {
+		throw new Error(`${name} is not configured`)
 	}
-	return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+	return value
 }
 
-function decodeBase64Url(value: string) {
-	const normalized = value.replaceAll('-', '+').replaceAll('_', '/')
-	const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
-	const binary = atob(padded)
-	return Uint8Array.from(binary, (character) => character.charCodeAt(0))
-}
-
-function constantTimeEqual(left: Uint8Array, right: Uint8Array) {
-	if (left.length !== right.length) {
-		return false
+function keyFromJsonEnvironment(name: string) {
+	const value = Deno.env.get(name)
+	if (!value) {
+		return undefined
 	}
-	let difference = 0
-	for (let index = 0; index < left.length; index += 1) {
-		difference |= left[index] ^ right[index]
+	try {
+		const keys = JSON.parse(value) as Record<string, string>
+		return keys.default ?? Object.values(keys)[0]
+	} catch {
+		return undefined
 	}
-	return difference === 0
 }
 
-async function hmac(value: string, secret: string) {
-	const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { hash: 'SHA-256', name: 'HMAC' }, false, [
-		'sign',
-	])
-	return new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(value)))
+function publishableKey() {
+	return Deno.env.get('SUPABASE_ANON_KEY') ?? keyFromJsonEnvironment('SUPABASE_PUBLISHABLE_KEYS') ??
+		requiredEnv('SUPABASE_ANON_KEY')
 }
 
-export async function verifyPassword(password: string, storedPassword: string) {
-	const [algorithm, iterationsValue, salt, storedHash] = storedPassword.split('$')
-	const iterations = Number(iterationsValue)
-	if (algorithm !== 'pbkdf2_sha256' || !Number.isInteger(iterations) || iterations <= 0 || !salt || !storedHash) {
-		return false
+function secretKey() {
+	return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? keyFromJsonEnvironment('SUPABASE_SECRET_KEYS') ??
+		requiredEnv('SUPABASE_SERVICE_ROLE_KEY')
+}
+
+function authClient() {
+	return createClient(requiredEnv('SUPABASE_URL'), publishableKey(), {
+		auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
+	})
+}
+
+function adminClient() {
+	return createClient(requiredEnv('SUPABASE_URL'), secretKey(), {
+		auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
+	})
+}
+
+export function parseUserRole(role: string): UserRole | undefined {
+	return userRoles.find((candidate) => candidate === role)
+}
+
+function mapProfile(record: ProfileRecord): AuthenticatedProfile {
+	const role = parseUserRole(record.role)
+	if (!record.authUserId || !role) {
+		throw new ApiError(403, 'User profile is not configured')
+	}
+	return {
+		id: record.id,
+		authUserId: record.authUserId,
+		companyId: record.companyId,
+		name: record.name,
+		email: record.email,
+		role,
+		companyName: record.companyName,
+	}
+}
+
+async function findProfileByAuthUserId(authUserId: string) {
+	const [record] = await sql<ProfileRecord[]>`
+		select u.id, u."authUserId", u."companyId", u.name, u.email, u.password, u.role, c.name as "companyName"
+		from "User" u
+		join "Company" c on c.id = u."companyId"
+		where u."authUserId" = ${authUserId}
+		limit 1
+	`
+	return record ? mapProfile(record) : undefined
+}
+
+async function findLegacyProfile(email: string) {
+	const [record] = await sql<ProfileRecord[]>`
+		select u.id, u."authUserId", u."companyId", u.name, u.email, u.password, u.role, c.name as "companyName"
+		from "User" u
+		join "Company" c on c.id = u."companyId"
+		where lower(u.email) = ${email}
+		limit 1
+	`
+	return record
+}
+
+async function linkProfile(profileId: string, authUserId: string) {
+	await sql`
+		update "User"
+		set "authUserId" = ${authUserId}, password = null, "updatedAt" = now()
+		where id = ${profileId}
+	`
+}
+
+async function findAuthUserByEmail(email: string) {
+	const { data, error } = await adminClient().auth.admin.listUsers({ page: 1, perPage: 1000 })
+	if (error) {
+		throw error
+	}
+	return data.users.find((user) => user.email?.toLowerCase() === email)
+}
+
+async function migrateLegacyUser(record: ProfileRecord, password: string) {
+	if (!record.password || !(await verifyPassword(password, record.password))) {
+		throw new ApiError(401, 'Invalid email or password')
 	}
 
-	const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits'])
-	const candidate = new Uint8Array(
-		await crypto.subtle.deriveBits(
-			{ hash: 'SHA-256', iterations, name: 'PBKDF2', salt: encoder.encode(salt) },
-			key,
-			256,
-		),
-	)
-	return constantTimeEqual(candidate, decodeBase64Url(storedHash))
+	const admin = adminClient()
+	const existingAuthUser = await findAuthUserByEmail(record.email.toLowerCase())
+	let authUserId = existingAuthUser?.id
+
+	if (authUserId) {
+		const { error } = await admin.auth.admin.updateUserById(authUserId, {
+			email_confirm: true,
+			password,
+			user_metadata: { name: record.name },
+		})
+		if (error) {
+			throw error
+		}
+	} else {
+		const { data, error } = await admin.auth.admin.createUser({
+			email: record.email,
+			email_confirm: true,
+			password,
+			user_metadata: { name: record.name },
+		})
+		if (error || !data.user) {
+			throw error ?? new Error('Unable to create Supabase Auth user')
+		}
+		authUserId = data.user.id
+	}
+
+	const { data, error } = await authClient().auth.signInWithPassword({ email: record.email, password })
+	if (error || !data.session || !authUserId) {
+		throw error ?? new Error('Unable to create Supabase session')
+	}
+
+	await linkProfile(record.id, authUserId)
+	return { profile: await findProfileByAuthUserId(authUserId), session: data.session }
 }
 
-export async function createSession(user: SessionUser, companyId: string, secret: string) {
-	const header = encodeBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
-	const payload = encodeBase64Url(
-		JSON.stringify({
-			...user,
-			companyId,
-			exp: Math.floor(Date.now() / 1000) + 60 * 60 * 12,
-		}),
-	)
-	const signature = encodeBase64Url(await hmac(`${header}.${payload}`, secret))
-	return `${header}.${payload}.${signature}`
+export async function login(emailValue: string, password: string) {
+	const email = emailValue.trim().toLowerCase()
+	const directLogin = await authClient().auth.signInWithPassword({ email, password })
+
+	if (directLogin.data.session && directLogin.data.user) {
+		let profile = await findProfileByAuthUserId(directLogin.data.user.id)
+		if (profile) {
+			await linkProfile(profile.id, directLogin.data.user.id)
+		} else {
+			const legacyProfile = await findLegacyProfile(email)
+			if (!legacyProfile || (legacyProfile.authUserId && legacyProfile.authUserId !== directLogin.data.user.id)) {
+				throw new ApiError(403, 'User profile is not configured')
+			}
+			await linkProfile(legacyProfile.id, directLogin.data.user.id)
+			profile = await findProfileByAuthUserId(directLogin.data.user.id)
+		}
+		if (!profile) {
+			throw new ApiError(403, 'User profile is not configured')
+		}
+		return { profile, session: directLogin.data.session }
+	}
+
+	const legacyProfile = await findLegacyProfile(email)
+	if (!legacyProfile) {
+		throw new ApiError(401, 'Invalid email or password')
+	}
+	const migrated = await migrateLegacyUser(legacyProfile, password)
+	if (!migrated.profile) {
+		throw new ApiError(403, 'User profile is not configured')
+	}
+	return { profile: migrated.profile, session: migrated.session }
 }
 
-export async function requireSession(request: Request, secret: string) {
+function bearerToken(request: Request) {
 	const authorization = request.headers.get('authorization')
 	if (!authorization?.startsWith('Bearer ')) {
 		throw new ApiError(401, 'Authentication required')
 	}
-
-	const token = authorization.slice('Bearer '.length)
-	const [header, payload, signature] = token.split('.')
-	if (!header || !payload || !signature) {
-		throw new ApiError(401, 'Invalid session')
-	}
-
-	const expectedSignature = await hmac(`${header}.${payload}`, secret)
-	if (!constantTimeEqual(expectedSignature, decodeBase64Url(signature))) {
-		throw new ApiError(401, 'Invalid session')
-	}
-
-	try {
-		const claims = JSON.parse(new TextDecoder().decode(decodeBase64Url(payload))) as SessionClaims
-		if (!claims.id || !claims.companyId || !userRoles.includes(claims.role) || claims.exp <= Date.now() / 1000) {
-			throw new Error('Invalid claims')
-		}
-		return claims
-	} catch {
-		throw new ApiError(401, 'Invalid or expired session')
-	}
+	return authorization.slice('Bearer '.length)
 }
 
-export function requireRole(session: SessionClaims, roles: UserRole[]) {
+export async function requireSession(request: Request) {
+	const { data, error } = await authClient().auth.getUser(bearerToken(request))
+	if (error || !data.user) {
+		throw new ApiError(401, 'Invalid or expired session')
+	}
+	const profile = await findProfileByAuthUserId(data.user.id)
+	if (!profile) {
+		throw new ApiError(403, 'User profile is not configured')
+	}
+	return profile
+}
+
+export function requireRole(session: AuthenticatedProfile, roles: UserRole[]) {
 	if (!roles.includes(session.role)) {
 		throw new ApiError(403, 'Insufficient permissions')
 	}
 }
 
-export function toSessionUser(session: SessionClaims): SessionUser {
+export function toSessionUser(session: AuthenticatedProfile): SessionUser {
 	return {
 		id: session.id,
 		name: session.name,
@@ -127,6 +241,11 @@ export function toSessionUser(session: SessionClaims): SessionUser {
 	}
 }
 
-export function parseUserRole(role: string): UserRole | undefined {
-	return userRoles.find((candidate) => candidate === role)
+export function sessionResponse(session: Session, profile: AuthenticatedProfile) {
+	return {
+		token: session.access_token,
+		refreshToken: session.refresh_token,
+		expiresAt: session.expires_at,
+		user: toSessionUser(profile),
+	}
 }

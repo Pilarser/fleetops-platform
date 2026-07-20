@@ -1,14 +1,16 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react'
 import { demoUsers } from '../data/demo-users'
 import { fleetApi, hasFleetApi } from '../services/fleet-api'
+import { hasSupabaseAuth, supabaseAuth } from '../services/supabase-auth'
 import type { SessionUser } from '../types'
 
-const tokenStorageKey = 'fleetos.session.token'
 const userStorageKey = 'fleetos.session.user'
+const tokenStorageKey = 'fleetos.session.token'
 
 interface AuthState {
 	isAuthenticated: boolean
 	isAuthenticating: boolean
+	isInitializing: boolean
 	user: SessionUser | null
 	login: (credentials: { email: string; password: string }) => Promise<void>
 	logout: () => void
@@ -30,44 +32,86 @@ function readStoredUser() {
 	}
 }
 
+function clearStoredUser() {
+	localStorage.removeItem(userStorageKey)
+	localStorage.removeItem(tokenStorageKey)
+}
+
+function storeUser(user: SessionUser) {
+	localStorage.setItem(userStorageKey, JSON.stringify(user))
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-	const [user, setUser] = useState<SessionUser | null>(() => readStoredUser())
+	const usesHostedAuth = hasFleetApi() && hasSupabaseAuth()
+	const [user, setUser] = useState<SessionUser | null>(() => (usesHostedAuth ? null : readStoredUser()))
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
+	const [isInitializing, setIsInitializing] = useState(usesHostedAuth)
 
 	useEffect(() => {
-		if (!hasFleetApi() || !user) {
+		const auth = supabaseAuth
+		if (!usesHostedAuth || !auth) {
+			setIsInitializing(false)
 			return
 		}
 
 		let cancelled = false
-		fleetApi
-			.me()
-			.then((sessionUser) => {
-				if (cancelled) {
-					return
-				}
-				localStorage.setItem(userStorageKey, JSON.stringify(sessionUser))
-				setUser(sessionUser)
-			})
-			.catch(() => {
-				if (cancelled) {
-					return
-				}
+		const synchronizeSession = async () => {
+			const { data } = await auth.auth.getSession()
+			if (cancelled) {
+				return
+			}
+			if (!data.session) {
 				fleetApi.setToken(null)
-				localStorage.removeItem(tokenStorageKey)
-				localStorage.removeItem(userStorageKey)
+				clearStoredUser()
 				setUser(null)
-			})
+				setIsInitializing(false)
+				return
+			}
+
+			fleetApi.setToken(data.session.access_token)
+			localStorage.removeItem(tokenStorageKey)
+			try {
+				const sessionUser = await fleetApi.me()
+				if (!cancelled) {
+					storeUser(sessionUser)
+					setUser(sessionUser)
+				}
+			} catch {
+				await auth.auth.signOut()
+				if (!cancelled) {
+					fleetApi.setToken(null)
+					clearStoredUser()
+					setUser(null)
+				}
+			} finally {
+				if (!cancelled) {
+					setIsInitializing(false)
+				}
+			}
+		}
+
+		void synchronizeSession()
+		const { data } = auth.auth.onAuthStateChange((_event, session) => {
+			fleetApi.setToken(session?.access_token ?? null)
+			if (session) {
+				localStorage.removeItem(tokenStorageKey)
+			} else {
+				clearStoredUser()
+				setUser(null)
+			}
+		})
 
 		return () => {
 			cancelled = true
+			data.subscription.unsubscribe()
 		}
-	}, [])
+	}, [usesHostedAuth])
 
 	const value = useMemo<AuthState>(
 		() => ({
 			isAuthenticated: Boolean(user),
 			isAuthenticating,
+			isInitializing,
 			user,
 			login: async ({ email, password }) => {
 				setIsAuthenticating(true)
@@ -77,9 +121,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 							email: email.trim().toLowerCase(),
 							password,
 						})
+						if (supabaseAuth) {
+							if (!session.refreshToken) {
+								throw new Error('The API did not return a refreshable Supabase session')
+							}
+							const { error } = await supabaseAuth.auth.setSession({
+								access_token: session.token,
+								refresh_token: session.refreshToken,
+							})
+							if (error) {
+								throw error
+							}
+							localStorage.removeItem(tokenStorageKey)
+						} else {
+							localStorage.setItem(tokenStorageKey, session.token)
+						}
 						fleetApi.setToken(session.token)
-						localStorage.setItem(tokenStorageKey, session.token)
-						localStorage.setItem(userStorageKey, JSON.stringify(session.user))
+						storeUser(session.user)
 						setUser(session.user)
 						return
 					}
@@ -99,8 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 						role: demoUser.role,
 						companyName: demoUser.companyName,
 					}
-					localStorage.setItem(tokenStorageKey, 'local-demo-token')
-					localStorage.setItem(userStorageKey, JSON.stringify(sessionUser))
+					storeUser(sessionUser)
 					setUser(sessionUser)
 				} finally {
 					setIsAuthenticating(false)
@@ -108,12 +165,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			},
 			logout: () => {
 				fleetApi.setToken(null)
-				localStorage.removeItem(tokenStorageKey)
-				localStorage.removeItem(userStorageKey)
+				clearStoredUser()
 				setUser(null)
+				if (supabaseAuth) {
+					void supabaseAuth.auth.signOut()
+				}
 			},
 		}),
-		[isAuthenticating, user],
+		[isAuthenticating, isInitializing, user],
 	)
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

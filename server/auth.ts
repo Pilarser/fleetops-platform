@@ -23,7 +23,7 @@ export async function findUserByCredentials(email: string, password: string) {
 		where: { email: email.trim().toLowerCase() },
 	})
 
-	if (!user || !verifyPassword(password, user.password) || !isUserRole(user.role)) {
+	if (!user || !user.password || !verifyPassword(password, user.password) || !isUserRole(user.role)) {
 		return undefined
 	}
 

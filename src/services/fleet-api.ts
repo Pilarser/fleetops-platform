@@ -9,7 +9,7 @@ export interface FleetWorkspacePayload {
 }
 
 const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '')
-let authToken = localStorage.getItem('fleetos.session.token')
+let authToken: string | null = localStorage.getItem('fleetos.session.token')
 
 export function hasFleetApi() {
 	return Boolean(apiBaseUrl)
@@ -41,7 +41,7 @@ export const fleetApi = {
 		authToken = token
 	},
 	login: (credentials: { email: string; password: string }) =>
-		request<{ token: string; user: SessionUser }>('/auth/login', {
+		request<{ token: string; refreshToken?: string; expiresAt?: number; user: SessionUser }>('/auth/login', {
 			method: 'POST',
 			body: JSON.stringify(credentials),
 		}),

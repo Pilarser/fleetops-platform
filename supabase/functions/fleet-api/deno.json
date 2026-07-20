@@ -1,6 +1,7 @@
 {
 	"imports": {
 		"postgres": "npm:postgres@3.4.7",
+		"supabase": "npm:@supabase/supabase-js@2.110.7",
 		"zod": "npm:zod@4.4.3"
 	},
 	"fmt": {

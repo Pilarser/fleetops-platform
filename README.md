@@ -18,7 +18,9 @@ FleetOS helps companies manage fleet mobility from one operations portal: vehicl
 - Plain CSS for the first iteration, with an easy path to Tailwind/shadcn CLI later
 - Lucide icons
 - Prisma 7
-- Postgres for local backend persistence via Docker
+- Supabase Auth for hosted identity and refreshable sessions
+- Supabase Postgres for hosted persistence
+- Postgres via Docker for isolated local backend development
 
 ## Phase 1 Scope
 
@@ -133,4 +135,4 @@ finance@example.com / demo1234
 driver@example.com / demo1234
 ```
 
-When `VITE_API_URL` is configured, login uses the local API. Without `VITE_API_URL`, the static GitHub Pages demo uses the same demo users locally in the browser.
+When `VITE_API_URL` points to the hosted Edge API and the Supabase frontend variables are configured, login uses persistent Supabase Auth sessions. Existing demo accounts migrate automatically on their first successful hosted login. Without `VITE_API_URL`, the app uses the same demo users locally in the browser.

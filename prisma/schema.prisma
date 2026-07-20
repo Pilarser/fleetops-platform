@@ -27,10 +27,11 @@ model Company {
 
 model User {
   id        String   @id
+  authUserId String? @unique
   companyId String
   name      String
   email     String   @unique
-  password  String
+  password  String?
   role      String
   company   Company  @relation(fields: [companyId], references: [id])
   createdAt DateTime @default(now())
