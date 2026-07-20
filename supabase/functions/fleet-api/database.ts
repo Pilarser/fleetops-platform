@@ -82,7 +82,7 @@ export async function getWorkspace(companyId: string) {
 			DbDriver[]
 		>`select id, name, email, status, "vehicleId", "costCenter", "monthlySpend", "personalSpend" from "Driver" where "companyId" = ${companyId} order by name asc`,
 		sql`select id, name, service, address, city, "distanceKm", status from "ProviderLocation" where "companyId" = ${companyId} order by name asc`,
-		sql`select id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} order by name asc`,
+		sql`select type as id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} order by name asc`,
 		sql`select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
 		sql<
 			DbVehicle[]
@@ -203,8 +203,8 @@ export async function toggleService(companyId: string, serviceId: string) {
 	const [service] = await sql`
 		update "MobilityService"
 		set enabled = not enabled, "updatedAt" = now()
-		where id = ${serviceId} and "companyId" = ${companyId}
-		returning id, name, description, enabled, "monthlyLimit", "requiresApproval"
+		where type = ${serviceId} and "companyId" = ${companyId}
+		returning type as id, name, description, enabled, "monthlyLimit", "requiresApproval"
 	`
 	if (!service) {
 		throw new ApiError(404, 'Service not found')

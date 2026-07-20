@@ -2,6 +2,7 @@ import { createClient, type Session } from 'supabase'
 import { sql } from './database.ts'
 import { ApiError } from './http.ts'
 import { verifyPassword } from './passwords.ts'
+import { registrationMetadataSchema } from './schemas.ts'
 
 export type UserRole = 'fleet_admin' | 'manager' | 'finance' | 'driver' | 'support'
 
@@ -30,6 +31,16 @@ type ProfileRecord = {
 }
 
 const userRoles: UserRole[] = ['fleet_admin', 'manager', 'finance', 'driver', 'support']
+const defaultServices = [
+	['fuel', 'Fuel', 'Fuel payments and business/private expense split.', true, 1200, false],
+	['charging', 'EV charging', 'Charging sessions from enabled provider networks.', true, 800, false],
+	['parking', 'Parking', 'Street parking, garage payments, and parking history.', true, 300, false],
+	['fines', 'Fines', 'Fine intake, assignment, payment, and dispute workflow.', true, 500, true],
+	['wash', 'Car wash', 'Bookable washes with receipt consolidation.', true, 180, false],
+	['tolls', 'Tolls', 'Toll device usage and toll provider reconciliation.', false, 600, false],
+	['area_c', 'Area C', 'Urban access payments by plate and city rule set.', true, 160, false],
+	['taxi', 'Taxi', 'Ride booking and corporate payment attribution.', false, 400, true],
+] as const
 
 function requiredEnv(name: string) {
 	const value = Deno.env.get(name)
@@ -103,6 +114,14 @@ async function findProfileByAuthUserId(authUserId: string) {
 		limit 1
 	`
 	return record ? mapProfile(record) : undefined
+}
+
+async function authenticatedIdentity(request: Request) {
+	const { data, error } = await authClient().auth.getUser(bearerToken(request))
+	if (error || !data.user) {
+		throw new ApiError(401, 'Invalid or expired session')
+	}
+	return data.user
 }
 
 async function findLegacyProfile(email: string) {
@@ -214,13 +233,58 @@ function bearerToken(request: Request) {
 }
 
 export async function requireSession(request: Request) {
-	const { data, error } = await authClient().auth.getUser(bearerToken(request))
-	if (error || !data.user) {
-		throw new ApiError(401, 'Invalid or expired session')
-	}
-	const profile = await findProfileByAuthUserId(data.user.id)
+	const identity = await authenticatedIdentity(request)
+	const profile = await findProfileByAuthUserId(identity.id)
 	if (!profile) {
 		throw new ApiError(403, 'User profile is not configured')
+	}
+	return profile
+}
+
+export async function completeCompanyRegistration(request: Request) {
+	const identity = await authenticatedIdentity(request)
+	if (!identity.email || !identity.email_confirmed_at) {
+		throw new ApiError(403, 'Email verification is required')
+	}
+
+	const existingProfile = await findProfileByAuthUserId(identity.id)
+	if (existingProfile) {
+		return existingProfile
+	}
+
+	const metadata = registrationMetadataSchema.parse(identity.user_metadata)
+	const email = identity.email.trim().toLowerCase()
+	const companyId = `company-${crypto.randomUUID()}`
+	const profileId = `user-${crypto.randomUUID()}`
+
+	await sql.begin(async (transaction) => {
+		const [emailOwner] = await transaction`
+			select id from "User" where lower(email) = ${email} limit 1
+		`
+		if (emailOwner) {
+			throw new ApiError(409, 'An account already exists for this email')
+		}
+
+		await transaction`
+			insert into "Company" (id, name, "createdAt", "updatedAt")
+			values (${companyId}, ${metadata.company_name}, now(), now())
+		`
+		await transaction`
+			insert into "User" (id, "authUserId", "companyId", name, email, password, role, "createdAt", "updatedAt")
+			values (${profileId}, ${identity.id}, ${companyId}, ${metadata.admin_name}, ${email}, null, 'fleet_admin', now(), now())
+		`
+
+		for (const [type, name, description, enabled, monthlyLimit, requiresApproval] of defaultServices) {
+			await transaction`
+				insert into "MobilityService" (id, "companyId", type, name, description, enabled, "monthlyLimit", "requiresApproval", "createdAt", "updatedAt")
+				values (${`${companyId}:${type}`}, ${companyId}, ${type}, ${name}, ${description}, ${enabled}, ${monthlyLimit}, ${requiresApproval}, now(), now())
+			`
+		}
+	})
+
+	const profile = await findProfileByAuthUserId(identity.id)
+	if (!profile) {
+		throw new Error('Unable to create company administrator profile')
 	}
 	return profile
 }

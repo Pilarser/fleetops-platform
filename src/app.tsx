@@ -6,6 +6,7 @@ import { DriversPage } from './pages/drivers'
 import { NotFoundPage } from './pages/not-found'
 import { ProvidersPage } from './pages/providers'
 import { ReportsPage } from './pages/reports'
+import { RegisterPage } from './pages/register'
 import { ServicesPage } from './pages/services'
 import { TransactionsPage } from './pages/transactions'
 import { VehiclesPage } from './pages/vehicles'
@@ -34,7 +35,12 @@ function AuthenticatedApp() {
 	}
 
 	if (!isAuthenticated) {
-		return <LoginPage />
+		return (
+			<Routes>
+				<Route path="/register" element={<RegisterPage />} />
+				<Route path="*" element={<LoginPage />} />
+			</Routes>
+		)
 	}
 
 	return (

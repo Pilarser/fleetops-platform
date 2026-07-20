@@ -194,6 +194,10 @@ a {
 	padding: 24px;
 }
 
+.registration-card {
+	width: min(100%, 560px);
+}
+
 .login-brand {
 	padding: 0;
 }
@@ -224,6 +228,82 @@ a {
 	display: grid;
 	gap: 16px;
 	margin-top: 24px;
+}
+
+.registration-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+}
+
+.checkbox-field {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	color: #475467;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.checkbox-field input {
+	width: 16px;
+	height: 16px;
+	margin: 2px 0 0;
+	accent-color: #1d5b50;
+}
+
+.auth-switch {
+	margin: 20px 0 0;
+	color: #667085;
+	font-size: 13px;
+	text-align: center;
+}
+
+.auth-switch a,
+.auth-link {
+	color: #1d5b50;
+	font-weight: 750;
+}
+
+.form-success {
+	margin: 0;
+	color: #116149;
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.verification-state {
+	display: grid;
+	justify-items: center;
+	gap: 12px;
+	padding: 42px 4px 16px;
+	color: #1d5b50;
+	text-align: center;
+}
+
+.verification-state h1 {
+	margin: 4px 0 0;
+	color: #17202a;
+	font-size: 26px;
+}
+
+.verification-state p {
+	max-width: 430px;
+	margin: 0;
+	color: #667085;
+	line-height: 1.5;
+}
+
+.verification-state p strong {
+	color: #17202a;
+}
+
+.verification-actions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	margin-top: 8px;
 }
 
 .icon-button,
@@ -874,6 +954,14 @@ tr:last-child td {
 
 	.form-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.registration-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.verification-actions {
+		flex-direction: column;
 	}
 
 	.overlay {

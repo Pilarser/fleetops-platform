@@ -1,12 +1,12 @@
-import { login, requireRole, requireSession, sessionResponse, toSessionUser } from './auth.ts'
 import {
-	createDriver,
-	createVehicle,
-	getWorkspace,
-	toggleService,
-	updateDriver,
-	updateVehicle,
-} from './database.ts'
+	completeCompanyRegistration,
+	login,
+	requireRole,
+	requireSession,
+	sessionResponse,
+	toSessionUser,
+} from './auth.ts'
+import { createDriver, createVehicle, getWorkspace, toggleService, updateDriver, updateVehicle } from './database.ts'
 import { ApiError, corsHeaders, json, readJson } from './http.ts'
 import { driverPayloadSchema, loginSchema, serviceIdSchema, vehiclePayloadSchema } from './schemas.ts'
 
@@ -36,6 +36,10 @@ Deno.serve(async (request) => {
 			const payload = loginSchema.parse(await readJson(request))
 			const { profile, session } = await login(payload.email, payload.password)
 			return json(sessionResponse(session, profile))
+		}
+
+		if (request.method === 'POST' && path === '/auth/complete-registration') {
+			return json(toSessionUser(await completeCompanyRegistration(request)), 201)
 		}
 
 		const session = await requireSession(request)

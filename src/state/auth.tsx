@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react'
 import { demoUsers } from '../data/demo-users'
-import { fleetApi, hasFleetApi } from '../services/fleet-api'
+import { FleetApiError, fleetApi, hasFleetApi } from '../services/fleet-api'
 import { hasSupabaseAuth, supabaseAuth } from '../services/supabase-auth'
 import type { SessionUser } from '../types'
 
@@ -11,9 +11,19 @@ interface AuthState {
 	isAuthenticated: boolean
 	isAuthenticating: boolean
 	isInitializing: boolean
+	isRegistering: boolean
 	user: SessionUser | null
 	login: (credentials: { email: string; password: string }) => Promise<void>
+	registerCompany: (registration: CompanyRegistration) => Promise<{ requiresEmailVerification: boolean }>
+	resendVerification: (email: string) => Promise<void>
 	logout: () => void
+}
+
+interface CompanyRegistration {
+	adminName: string
+	companyName: string
+	email: string
+	password: string
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
@@ -41,11 +51,27 @@ function storeUser(user: SessionUser) {
 	localStorage.setItem(userStorageKey, JSON.stringify(user))
 }
 
+function authRedirectUrl() {
+	return new URL(import.meta.env.BASE_URL, window.location.origin).toString()
+}
+
+async function loadHostedUser() {
+	try {
+		return await fleetApi.me()
+	} catch (error) {
+		if (error instanceof FleetApiError && error.status === 403) {
+			return fleetApi.completeRegistration()
+		}
+		throw error
+	}
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
 	const usesHostedAuth = hasFleetApi() && hasSupabaseAuth()
 	const [user, setUser] = useState<SessionUser | null>(() => (usesHostedAuth ? null : readStoredUser()))
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
 	const [isInitializing, setIsInitializing] = useState(usesHostedAuth)
+	const [isRegistering, setIsRegistering] = useState(false)
 
 	useEffect(() => {
 		const auth = supabaseAuth
@@ -71,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			fleetApi.setToken(data.session.access_token)
 			localStorage.removeItem(tokenStorageKey)
 			try {
-				const sessionUser = await fleetApi.me()
+				const sessionUser = await loadHostedUser()
 				if (!cancelled) {
 					storeUser(sessionUser)
 					setUser(sessionUser)
@@ -112,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			isAuthenticated: Boolean(user),
 			isAuthenticating,
 			isInitializing,
+			isRegistering,
 			user,
 			login: async ({ email, password }) => {
 				setIsAuthenticating(true)
@@ -163,6 +190,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					setIsAuthenticating(false)
 				}
 			},
+			registerCompany: async ({ adminName, companyName, email, password }) => {
+				if (!supabaseAuth || !hasFleetApi()) {
+					throw new Error('Company registration requires Supabase authentication')
+				}
+
+				setIsRegistering(true)
+				try {
+					const { data, error } = await supabaseAuth.auth.signUp({
+						email: email.trim().toLowerCase(),
+						password,
+						options: {
+							data: {
+								admin_name: adminName.trim(),
+								company_name: companyName.trim(),
+								registration_intent: 'company_admin',
+								terms_accepted_at: new Date().toISOString(),
+							},
+							emailRedirectTo: authRedirectUrl(),
+						},
+					})
+					if (error) {
+						throw error
+					}
+
+					if (!data.session) {
+						return { requiresEmailVerification: true }
+					}
+
+					fleetApi.setToken(data.session.access_token)
+					const sessionUser = await fleetApi.completeRegistration()
+					storeUser(sessionUser)
+					setUser(sessionUser)
+					return { requiresEmailVerification: false }
+				} finally {
+					setIsRegistering(false)
+				}
+			},
+			resendVerification: async (email) => {
+				if (!supabaseAuth) {
+					throw new Error('Supabase authentication is not configured')
+				}
+				const { error } = await supabaseAuth.auth.resend({
+					type: 'signup',
+					email: email.trim().toLowerCase(),
+					options: { emailRedirectTo: authRedirectUrl() },
+				})
+				if (error) {
+					throw error
+				}
+			},
 			logout: () => {
 				fleetApi.setToken(null)
 				clearStoredUser()
@@ -172,7 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				}
 			},
 		}),
-		[isAuthenticating, isInitializing, user],
+		[isAuthenticating, isInitializing, isRegistering, user],
 	)
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

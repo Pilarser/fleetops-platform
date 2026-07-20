@@ -11,6 +11,15 @@ export interface FleetWorkspacePayload {
 const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '')
 let authToken: string | null = localStorage.getItem('fleetos.session.token')
 
+export class FleetApiError extends Error {
+	constructor(
+		public readonly status: number,
+		message: string,
+	) {
+		super(message)
+	}
+}
+
 export function hasFleetApi() {
 	return Boolean(apiBaseUrl)
 }
@@ -30,7 +39,8 @@ async function request<T>(path: string, options?: RequestInit) {
 	})
 
 	if (!response.ok) {
-		throw new Error(`Fleet API request failed with ${response.status}`)
+		const payload = (await response.json().catch(() => null)) as { message?: string } | null
+		throw new FleetApiError(response.status, payload?.message ?? `Fleet API request failed with ${response.status}`)
 	}
 
 	return (await response.json()) as T
@@ -46,6 +56,7 @@ export const fleetApi = {
 			body: JSON.stringify(credentials),
 		}),
 	me: () => request<SessionUser>('/auth/me'),
+	completeRegistration: () => request<SessionUser>('/auth/complete-registration', { method: 'POST' }),
 	getWorkspace: () => request<FleetWorkspacePayload>('/workspace'),
 	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>) =>
 		request<Driver>('/drivers', {

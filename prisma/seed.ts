@@ -138,6 +138,7 @@ for (const service of services) {
     await prisma.mobilityService.upsert({
         where: { id: service.id },
         update: {
+            type: service.id,
             name: service.name,
             description: service.description,
             enabled: service.enabled,
@@ -147,6 +148,7 @@ for (const service of services) {
         create: {
             id: service.id,
             companyId: 'demo-company',
+            type: service.id,
             name: service.name,
             description: service.description,
             enabled: service.enabled,

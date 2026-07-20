@@ -5,6 +5,12 @@ export const loginSchema = z.object({
 	password: z.string().min(1),
 })
 
+export const registrationMetadataSchema = z.object({
+	admin_name: z.string().trim().min(2).max(100),
+	company_name: z.string().trim().min(2).max(120),
+	registration_intent: z.literal('company_admin'),
+})
+
 export const driverPayloadSchema = z.object({
 	name: z.string().min(1),
 	email: z.string().email(),

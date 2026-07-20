@@ -136,3 +136,7 @@ driver@example.com / demo1234
 ```
 
 When `VITE_API_URL` points to the hosted Edge API and the Supabase frontend variables are configured, login uses persistent Supabase Auth sessions. Existing demo accounts migrate automatically on their first successful hosted login. Without `VITE_API_URL`, the app uses the same demo users locally in the browser.
+
+## Company Registration
+
+New companies register through Supabase Auth. The company and first `fleet_admin` profile are created only after email verification. See `docs/company-registration.md` for dashboard configuration, deployment order, and the manual test flow.

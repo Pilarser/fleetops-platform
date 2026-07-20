@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react'
 import { Eye, EyeOff, Info } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Button, Card, Dialog, Field, TextInput } from '../components/ui'
 import { useAuth } from '../state/auth'
 
@@ -73,6 +74,9 @@ export function LoginPage() {
 						{isAuthenticating ? 'Signing in...' : 'Sign in'}
 					</Button>
 				</form>
+				<p className="auth-switch">
+					New company? <Link to="/register">Create an account</Link>
+				</p>
 			</Card>
 
 			{isInfoOpen ? (

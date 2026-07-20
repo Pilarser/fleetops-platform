@@ -105,7 +105,7 @@ function mapVehicle(vehicle: PrismaVehicle, drivers: PrismaDriver[]): Vehicle {
 
 function mapService(service: PrismaMobilityService): MobilityService {
 	return {
-		id: normalizeServiceType(service.id),
+		id: normalizeServiceType(service.type),
 		name: service.name,
 		description: service.description,
 		enabled: service.enabled,
@@ -233,12 +233,14 @@ export function createPrismaFleetStore(): FleetStore {
 			return mapVehicle(createdVehicle, drivers)
 		},
 		toggleService: async (serviceId: MobilityService['id']) => {
-			const currentService = await prisma.mobilityService.findUnique({ where: { id: serviceId } })
+			const currentService = await prisma.mobilityService.findUnique({
+				where: { companyId_type: { companyId, type: serviceId } },
+			})
 			if (!currentService) {
 				return undefined
 			}
 			const updatedService = await prisma.mobilityService.update({
-				where: { id: serviceId },
+				where: { companyId_type: { companyId, type: serviceId } },
 				data: { enabled: !currentService.enabled },
 			})
 			return mapService(updatedService)
