@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useMemo, useState } from 'react'
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react'
 import { demoUsers } from '../data/demo-users'
 import { fleetApi, hasFleetApi } from '../services/fleet-api'
 import type { SessionUser } from '../types'
@@ -33,6 +33,36 @@ function readStoredUser() {
 export function AuthProvider({ children }: { children: ReactNode }) {
 	const [user, setUser] = useState<SessionUser | null>(() => readStoredUser())
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
+
+	useEffect(() => {
+		if (!hasFleetApi() || !user) {
+			return
+		}
+
+		let cancelled = false
+		fleetApi
+			.me()
+			.then((sessionUser) => {
+				if (cancelled) {
+					return
+				}
+				localStorage.setItem(userStorageKey, JSON.stringify(sessionUser))
+				setUser(sessionUser)
+			})
+			.catch(() => {
+				if (cancelled) {
+					return
+				}
+				fleetApi.setToken(null)
+				localStorage.removeItem(tokenStorageKey)
+				localStorage.removeItem(userStorageKey)
+				setUser(null)
+			})
+
+		return () => {
+			cancelled = true
+		}
+	}, [])
 
 	const value = useMemo<AuthState>(
 		() => ({

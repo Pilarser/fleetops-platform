@@ -1,0 +1,12 @@
+{
+	"imports": {
+		"postgres": "npm:postgres@3.4.7",
+		"zod": "npm:zod@4.4.3"
+	},
+	"fmt": {
+		"lineWidth": 120,
+		"semiColons": false,
+		"singleQuote": true,
+		"useTabs": true
+	}
+}

@@ -34,3 +34,7 @@ prisma/dev.db-*
 /src/generated/prisma
 
 .env
+
+# Supabase CLI local state
+.supabase/
+supabase/.temp/

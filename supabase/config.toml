@@ -1,0 +1,5 @@
+project_id = "fleetops-platform"
+
+[functions.fleet-api]
+verify_jwt = false
+
