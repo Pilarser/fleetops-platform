@@ -39,8 +39,14 @@ async function request<T>(path: string, options?: RequestInit) {
 	})
 
 	if (!response.ok) {
-		const payload = (await response.json().catch(() => null)) as { message?: string } | null
-		throw new FleetApiError(response.status, payload?.message ?? `Fleet API request failed with ${response.status}`)
+		const payload = (await response.json().catch(() => null)) as
+			| { message?: string; issues?: Array<{ message?: string }> }
+			| null
+		const issueMessage = payload?.issues?.find((issue) => issue.message)?.message
+		throw new FleetApiError(
+			response.status,
+			issueMessage ?? payload?.message ?? `Fleet API request failed with ${response.status}`,
+		)
 	}
 
 	return (await response.json()) as T

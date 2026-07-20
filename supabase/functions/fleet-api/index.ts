@@ -146,7 +146,8 @@ Deno.serve(async (request) => {
 			return json({ message: error.message }, error.status)
 		}
 		if (error && typeof error === 'object' && 'issues' in error) {
-			return json({ message: 'Invalid request', issues: error.issues }, 400)
+			const issues = (error as { issues?: Array<{ message?: string }> }).issues
+			return json({ message: issues?.find((issue) => issue.message)?.message ?? 'Invalid request', issues }, 400)
 		}
 		console.error(error)
 		return json({ message: 'Internal server error' }, 500)

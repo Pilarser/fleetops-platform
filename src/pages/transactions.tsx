@@ -1,5 +1,5 @@
 import { type FormEvent, useMemo, useState } from 'react'
-import { Check, Download, Plus, X } from 'lucide-react'
+import { Check, Download, LoaderCircle, Plus, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
 	Badge,
@@ -63,6 +63,7 @@ export function TransactionsPage() {
 	const [reviewReason, setReviewReason] = useState('')
 	const [reviewError, setReviewError] = useState<string | null>(null)
 	const [isReviewing, setIsReviewing] = useState(false)
+	const [isRejecting, setIsRejecting] = useState(false)
 
 	const canCreate = Boolean(user && ['fleet_admin', 'manager', 'finance', 'support'].includes(user.role))
 	const canReview = Boolean(user && ['fleet_admin', 'manager', 'finance'].includes(user.role))
@@ -108,6 +109,13 @@ export function TransactionsPage() {
 		setReviewExpenseType(transaction.expenseType)
 		setReviewReason(transaction.rejectionReason ?? '')
 		setReviewError(null)
+		setIsRejecting(false)
+	}
+
+	function closeDetails() {
+		setSelectedTransaction(null)
+		setReviewError(null)
+		setIsRejecting(false)
 	}
 
 	function selectDriver(driverId: string) {
@@ -144,14 +152,12 @@ export function TransactionsPage() {
 		}
 		setIsReviewing(true)
 		try {
-			const updated = await updateTransaction(selectedTransaction.id, {
+			await updateTransaction(selectedTransaction.id, {
 				status,
 				expenseType: reviewExpenseType,
 				rejectionReason: status === 'rejected' ? reviewReason.trim() : undefined,
 			})
-			setSelectedTransaction(updated)
-			setReviewExpenseType(updated.expenseType)
-			setReviewReason(updated.rejectionReason ?? '')
+			closeDetails()
 		} catch (error) {
 			setReviewError(error instanceof Error ? error.message : 'Unable to review the transaction')
 		} finally {
@@ -311,8 +317,9 @@ export function TransactionsPage() {
 			) : null}
 
 			{selectedTransaction ? (
-				<Drawer title={selectedTransaction.id} onClose={() => setSelectedTransaction(null)}>
+				<Drawer title="Transaction details" onClose={closeDetails}>
 					<div className="detail-list">
+						<Detail label="Transaction ID" value={selectedTransaction.id} />
 						<Detail label="Date" value={selectedTransaction.date} />
 						<Detail label="Driver" value={getDriverName(selectedTransaction.driverId, drivers)} />
 						<Detail label="Vehicle" value={getVehiclePlate(selectedTransaction.vehicleId, vehicles)} />
@@ -332,25 +339,38 @@ export function TransactionsPage() {
 										<option value="personal">Personal</option>
 									</SelectInput>
 								</Field>
-								<Field label="Rejection reason">
-									<textarea
-										className="field"
-										maxLength={500}
-										placeholder="Required when rejecting"
-										rows={3}
-										value={reviewReason}
-										onChange={(event) => setReviewReason(event.target.value)}
-									/>
-								</Field>
 								{reviewError ? <p className="form-error">{reviewError}</p> : null}
-								<div className="form-actions">
-									<Button type="button" variant="secondary" disabled={isReviewing} onClick={() => void reviewTransaction('rejected')}>
-										<X size={16} /> Reject
-									</Button>
-									<Button type="button" disabled={isReviewing} onClick={() => void reviewTransaction('approved')}>
-										<Check size={16} /> Approve
-									</Button>
-								</div>
+								{isRejecting ? (
+									<>
+										<Field label="Rejection reason">
+											<textarea
+												className="field"
+												maxLength={500}
+												placeholder="Enter the reason for rejection"
+												rows={3}
+												value={reviewReason}
+												onChange={(event) => setReviewReason(event.target.value)}
+											/>
+										</Field>
+										<div className="form-actions">
+											<Button type="button" variant="secondary" disabled={isReviewing} onClick={() => { setIsRejecting(false); setReviewError(null) }}>Cancel</Button>
+											<Button type="button" disabled={isReviewing} onClick={() => void reviewTransaction('rejected')}>
+												{isReviewing ? <LoaderCircle className="spinner" size={16} /> : <X size={16} />}
+												{isReviewing ? 'Rejecting...' : 'Confirm rejection'}
+											</Button>
+										</div>
+									</>
+								) : (
+									<div className="form-actions">
+										<Button type="button" variant="secondary" disabled={isReviewing} onClick={() => { setIsRejecting(true); setReviewError(null) }}>
+											<X size={16} /> Reject
+										</Button>
+										<Button type="button" disabled={isReviewing} onClick={() => void reviewTransaction('approved')}>
+											{isReviewing ? <LoaderCircle className="spinner" size={16} /> : <Check size={16} />}
+											{isReviewing ? 'Approving...' : 'Approve'}
+										</Button>
+									</div>
+								)}
 							</>
 						) : (
 							<Detail label="Expense type" value={selectedTransaction.expenseType} />
