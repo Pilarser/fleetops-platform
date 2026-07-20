@@ -201,6 +201,24 @@ export function createPrismaFleetStore(): FleetStore {
 			})
 			return mapDriver(createdDriver)
 		},
+		createTransaction: async (transaction) => {
+			const createdTransaction = await prisma.fleetTransaction.create({
+				data: {
+					id: transaction.id,
+					companyId,
+					date: transaction.date,
+					driverId: transaction.driverId,
+					vehicleId: transaction.vehicleId,
+					service: transaction.service,
+					provider: transaction.provider,
+					amount: transaction.amount,
+					vat: transaction.vat,
+					status: transaction.status,
+					expenseType: transaction.expenseType,
+				},
+			})
+			return mapTransaction(createdTransaction)
+		},
 		createVehicle: async (vehicle) => {
 			await ensureCompany()
 			const createdVehicle = await prisma.$transaction(async (tx) => {
@@ -273,6 +291,20 @@ export function createPrismaFleetStore(): FleetStore {
 					})
 				})
 				return mapDriver(updatedDriver)
+			} catch {
+				return undefined
+			}
+		},
+		updateTransaction: async (transaction) => {
+			try {
+				const updatedTransaction = await prisma.fleetTransaction.update({
+					where: { id: transaction.id },
+					data: {
+						status: transaction.status,
+						expenseType: transaction.expenseType,
+					},
+				})
+				return mapTransaction(updatedTransaction)
 			} catch {
 				return undefined
 			}

@@ -16,9 +16,11 @@ export interface FleetStore {
 	path: string
 	getWorkspace: () => Promise<FleetDatabase>
 	createDriver: (driver: Driver) => Promise<Driver>
+	createTransaction: (transaction: Transaction) => Promise<Transaction>
 	createVehicle: (vehicle: Vehicle) => Promise<Vehicle>
 	toggleService: (serviceId: MobilityService['id']) => Promise<MobilityService | undefined>
 	updateDriver: (driver: Driver) => Promise<Driver | undefined>
+	updateTransaction: (transaction: Transaction) => Promise<Transaction | undefined>
 	updateVehicle: (vehicle: Vehicle) => Promise<Vehicle | undefined>
 }
 
@@ -103,6 +105,11 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			writeDatabase(path, database)
 			return driver
 		},
+		createTransaction: async (transaction: Transaction) => {
+			database = { ...database, transactions: [transaction, ...database.transactions] }
+			writeDatabase(path, database)
+			return transaction
+		},
 		createVehicle: async (vehicle: Vehicle) => {
 			database = {
 				...database,
@@ -142,6 +149,21 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			}
 			writeDatabase(path, database)
 			return updatedDriver
+		},
+		updateTransaction: async (transaction: Transaction) => {
+			let updatedTransaction: Transaction | undefined
+			database = {
+				...database,
+				transactions: database.transactions.map((item) => {
+					if (item.id !== transaction.id) {
+						return item
+					}
+					updatedTransaction = transaction
+					return transaction
+				}),
+			}
+			writeDatabase(path, database)
+			return updatedTransaction
 		},
 		updateVehicle: async (vehicle: Vehicle) => {
 			let updatedVehicle: Vehicle | undefined

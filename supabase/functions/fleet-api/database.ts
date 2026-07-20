@@ -48,6 +48,35 @@ type VehiclePayload = {
 	mileageKm: number
 }
 
+type DbTransaction = {
+	id: string
+	date: string
+	driverId: string
+	vehicleId: string
+	service: string
+	provider: string
+	amount: number
+	vat: number
+	status: string
+	expenseType: string
+}
+
+type TransactionPayload = {
+	date: string
+	driverId: string
+	vehicleId: string
+	service: string
+	provider: string
+	amount: number
+	vat: number
+	expenseType: 'business' | 'personal'
+}
+
+type TransactionReview = {
+	status: 'pending' | 'approved' | 'rejected'
+	expenseType: 'business' | 'personal'
+}
+
 export function mapDriver(driver: DbDriver) {
 	return {
 		id: driver.id,
@@ -76,6 +105,14 @@ function mapVehicle(vehicle: DbVehicle, drivers: DbDriver[]) {
 	}
 }
 
+function mapTransaction(transaction: DbTransaction) {
+	return {
+		...transaction,
+		amount: Number(transaction.amount),
+		vat: Number(transaction.vat),
+	}
+}
+
 export async function getWorkspace(companyId: string) {
 	const [drivers, providers, services, transactions, vehicles] = await Promise.all([
 		sql<
@@ -83,7 +120,7 @@ export async function getWorkspace(companyId: string) {
 		>`select id, name, email, status, "vehicleId", "costCenter", "monthlySpend", "personalSpend" from "Driver" where "companyId" = ${companyId} order by name asc`,
 		sql`select id, name, service, address, city, "distanceKm", status from "ProviderLocation" where "companyId" = ${companyId} order by name asc`,
 		sql`select type as id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} order by name asc`,
-		sql`select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
+		sql<DbTransaction[]>`select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
 		sql<
 			DbVehicle[]
 		>`select id, plate, make, model, "fuelType", status, "costCenter", "monthlySpend", "mileageKm" from "Vehicle" where "companyId" = ${companyId} order by plate asc`,
@@ -93,11 +130,7 @@ export async function getWorkspace(companyId: string) {
 		drivers: drivers.map(mapDriver),
 		providers: providers.map((provider) => ({ ...provider, distanceKm: Number(provider.distanceKm) })),
 		services: services.map((service) => ({ ...service, monthlyLimit: Number(service.monthlyLimit) })),
-		transactions: transactions.map((transaction) => ({
-			...transaction,
-			amount: Number(transaction.amount),
-			vat: Number(transaction.vat),
-		})),
+		transactions: transactions.map(mapTransaction),
 		vehicles: vehicles.map((vehicle) => mapVehicle(vehicle, drivers)),
 	}
 }
@@ -210,4 +243,43 @@ export async function toggleService(companyId: string, serviceId: string) {
 		throw new ApiError(404, 'Service not found')
 	}
 	return { ...service, monthlyLimit: Number(service.monthlyLimit) }
+}
+
+export async function createTransaction(companyId: string, payload: TransactionPayload) {
+	return sql.begin(async (transaction) => {
+		await ensureDriverBelongsToCompany(transaction, payload.driverId, companyId)
+		await ensureVehicleBelongsToCompany(transaction, payload.vehicleId, companyId)
+
+		const [service] = await transaction`
+			select type, enabled from "MobilityService"
+			where type = ${payload.service} and "companyId" = ${companyId}
+		`
+		if (!service) {
+			throw new ApiError(400, 'Mobility service does not exist')
+		}
+		if (!service.enabled) {
+			throw new ApiError(400, 'Mobility service is disabled')
+		}
+
+		const id = `transaction-${crypto.randomUUID()}`
+		const [created] = await transaction<DbTransaction[]>`
+			insert into "FleetTransaction" (id, "companyId", date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "createdAt", "updatedAt")
+			values (${id}, ${companyId}, ${payload.date}, ${payload.driverId}, ${payload.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, 'pending', ${payload.expenseType}, now(), now())
+			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType"
+		`
+		return mapTransaction(created)
+	})
+}
+
+export async function updateTransaction(companyId: string, transactionId: string, payload: TransactionReview) {
+	const [updated] = await sql<DbTransaction[]>`
+		update "FleetTransaction"
+		set status = ${payload.status}, "expenseType" = ${payload.expenseType}, "updatedAt" = now()
+		where id = ${transactionId} and "companyId" = ${companyId}
+		returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType"
+	`
+	if (!updated) {
+		throw new ApiError(404, 'Transaction not found')
+	}
+	return mapTransaction(updated)
 }

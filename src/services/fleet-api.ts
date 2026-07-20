@@ -68,6 +68,11 @@ export const fleetApi = {
 			method: 'POST',
 			body: JSON.stringify(vehicle),
 		}),
+	createTransaction: (transaction: Omit<Transaction, 'id' | 'status'>) =>
+		request<Transaction>('/transactions', {
+			method: 'POST',
+			body: JSON.stringify(transaction),
+		}),
 	toggleService: (serviceId: MobilityService['id']) =>
 		request<MobilityService>(`/services/${serviceId}`, {
 			method: 'PATCH',
@@ -81,5 +86,10 @@ export const fleetApi = {
 		request<Vehicle>(`/vehicles/${vehicle.id}`, {
 			method: 'PATCH',
 			body: JSON.stringify(vehicle),
+		}),
+	updateTransaction: (transactionId: string, review: Pick<Transaction, 'status' | 'expenseType'>) =>
+		request<Transaction>(`/transactions/${transactionId}`, {
+			method: 'PATCH',
+			body: JSON.stringify(review),
 		}),
 }

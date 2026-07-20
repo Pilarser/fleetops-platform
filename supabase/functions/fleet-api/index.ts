@@ -6,12 +6,30 @@ import {
 	sessionResponse,
 	toSessionUser,
 } from './auth.ts'
-import { createDriver, createVehicle, getWorkspace, toggleService, updateDriver, updateVehicle } from './database.ts'
+import {
+	createDriver,
+	createTransaction,
+	createVehicle,
+	getWorkspace,
+	toggleService,
+	updateDriver,
+	updateTransaction,
+	updateVehicle,
+} from './database.ts'
 import { ApiError, corsHeaders, json, readJson } from './http.ts'
-import { driverPayloadSchema, loginSchema, serviceIdSchema, vehiclePayloadSchema } from './schemas.ts'
+import {
+	driverPayloadSchema,
+	loginSchema,
+	serviceIdSchema,
+	transactionPayloadSchema,
+	transactionReviewSchema,
+	vehiclePayloadSchema,
+} from './schemas.ts'
 
 const workspaceRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
 const operationsRoles = ['fleet_admin', 'manager', 'support'] as const
+const transactionCreateRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
+const transactionReviewRoles = ['fleet_admin', 'manager', 'finance'] as const
 
 function routePath(request: Request) {
 	const pathname = new URL(request.url).pathname
@@ -83,6 +101,19 @@ Deno.serve(async (request) => {
 			requireRole(session, [...operationsRoles])
 			const serviceId = serviceIdSchema.parse(decodeURIComponent(path.slice('/services/'.length)))
 			return json(await toggleService(session.companyId, serviceId))
+		}
+
+		if (request.method === 'POST' && path === '/transactions') {
+			requireRole(session, [...transactionCreateRoles])
+			const payload = transactionPayloadSchema.parse(await readJson(request))
+			return json(await createTransaction(session.companyId, payload), 201)
+		}
+
+		if (request.method === 'PATCH' && path.startsWith('/transactions/')) {
+			requireRole(session, [...transactionReviewRoles])
+			const transactionId = decodeURIComponent(path.slice('/transactions/'.length))
+			const payload = transactionReviewSchema.parse(await readJson(request))
+			return json(await updateTransaction(session.companyId, transactionId, payload))
 		}
 
 		throw new ApiError(404, 'Not found')

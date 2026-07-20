@@ -241,6 +241,90 @@ describe('fleet API', () => {
 		assert.equal(updatedWorkspace.vehicles.find((item) => item.id === 'vehicle-1')?.assignedDriverId, '')
 	})
 
+	it('creates pending transactions and persists their review', async () => {
+		const token = await login()
+		const workspace = await getWorkspace(token)
+		const driver = workspace.drivers[0]
+		const vehicle = workspace.vehicles[0]
+		const service = workspace.services.find((item) => item.enabled)
+		assert.ok(driver)
+		assert.ok(vehicle)
+		assert.ok(service)
+
+		const createResponse = await fetch(`${baseUrl}/api/transactions`, {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				date: '2026-07-20',
+				driverId: driver.id,
+				vehicleId: vehicle.id,
+				service: service.id,
+				provider: 'Workflow Test Provider',
+				amount: 48.5,
+				vat: 8.75,
+				expenseType: 'business',
+			}),
+		})
+		const created = (await createResponse.json()) as { id: string; status: string }
+		assert.equal(createResponse.status, 201)
+		assert.equal(created.status, 'pending')
+
+		const reviewResponse = await fetch(`${baseUrl}/api/transactions/${created.id}`, {
+			method: 'PATCH',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({ status: 'approved', expenseType: 'personal' }),
+		})
+		assert.equal(reviewResponse.status, 200)
+
+		const updatedWorkspace = await getWorkspace(token)
+		const reviewed = updatedWorkspace.transactions.find((transaction) => transaction.id === created.id)
+		assert.equal(reviewed?.status, 'approved')
+		assert.equal(reviewed?.expenseType, 'personal')
+	})
+
+	it('rejects transactions with fleet references that do not exist', async () => {
+		const token = await login()
+		const response = await fetch(`${baseUrl}/api/transactions`, {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				date: '2026-07-20',
+				driverId: 'driver-missing',
+				vehicleId: 'vehicle-missing',
+				service: 'fuel',
+				provider: 'Invalid Test Provider',
+				amount: 10,
+				vat: 2,
+				expenseType: 'business',
+			}),
+		})
+
+		assert.equal(response.status, 400)
+	})
+
+	it('blocks drivers from creating transactions', async () => {
+		const token = await login('driver@example.com')
+		const response = await fetch(`${baseUrl}/api/transactions`, {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({}),
+		})
+
+		assert.equal(response.status, 403)
+	})
+
 	it('blocks driver role from admin workspace access', async () => {
 		const token = await login('driver@example.com')
 		const response = await fetch(`${baseUrl}/api/workspace`, {

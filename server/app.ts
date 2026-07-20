@@ -1,12 +1,21 @@
 import { createServer } from 'node:http'
-import type { Driver, MobilityService, Vehicle } from '../src/types'
+import type { Driver, MobilityService, Transaction, Vehicle } from '../src/types'
 import { createSession, prismaAuthProvider, requireRole, requireUser, type AuthProvider } from './auth'
 import { readBody, sendJson } from './http'
-import { driverPayloadSchema, loginSchema, serviceIdSchema, vehiclePayloadSchema } from './schemas'
+import {
+	driverPayloadSchema,
+	loginSchema,
+	serviceIdSchema,
+	transactionPayloadSchema,
+	transactionReviewSchema,
+	vehiclePayloadSchema,
+} from './schemas'
 import { createFleetStore, type FleetStore } from './storage'
 
 const workspaceRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
 const operationsRoles = ['fleet_admin', 'manager', 'support'] as const
+const transactionCreateRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
+const transactionReviewRoles = ['fleet_admin', 'manager', 'finance'] as const
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now()}`
@@ -133,6 +142,50 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					return
 				}
 				sendJson(response, 200, updatedService)
+				return
+			}
+
+			if (method === 'POST' && url.pathname === '/api/transactions') {
+				if (!requireRole(request, response, [...transactionCreateRoles])) {
+					return
+				}
+				const payload = transactionPayloadSchema.parse(await readBody(request))
+				const workspace = await store.getWorkspace()
+				if (!workspace.drivers.some((driver) => driver.id === payload.driverId)) {
+					sendJson(response, 400, { message: 'Driver does not exist' })
+					return
+				}
+				if (!workspace.vehicles.some((vehicle) => vehicle.id === payload.vehicleId)) {
+					sendJson(response, 400, { message: 'Vehicle does not exist' })
+					return
+				}
+				const service = workspace.services.find((item) => item.id === payload.service)
+				if (!service || !service.enabled) {
+					sendJson(response, 400, { message: 'Service is not enabled' })
+					return
+				}
+				const transaction: Transaction = {
+					...payload,
+					id: nextId('transaction'),
+					status: 'pending',
+				}
+				sendJson(response, 201, await store.createTransaction(transaction))
+				return
+			}
+
+			if (method === 'PATCH' && url.pathname.startsWith('/api/transactions/')) {
+				if (!requireRole(request, response, [...transactionReviewRoles])) {
+					return
+				}
+				const id = decodeURIComponent(url.pathname.replace('/api/transactions/', ''))
+				const payload = transactionReviewSchema.parse(await readBody(request))
+				const current = (await store.getWorkspace()).transactions.find((transaction) => transaction.id === id)
+				const updatedTransaction = current ? await store.updateTransaction({ ...current, ...payload, id }) : undefined
+				if (!updatedTransaction) {
+					sendJson(response, 404, { message: 'Transaction not found' })
+					return
+				}
+				sendJson(response, 200, updatedTransaction)
 				return
 			}
 

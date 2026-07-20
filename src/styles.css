@@ -386,6 +386,9 @@ a {
 }
 
 .page-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
 	flex: 0 0 auto;
 }
 
@@ -550,6 +553,16 @@ tr:last-child td {
 	cursor: pointer;
 }
 
+.button svg {
+	flex: 0 0 auto;
+	margin-right: 7px;
+}
+
+.button:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
 .button-secondary {
 	border-color: #cfd8e3;
 	background: #fff;
@@ -676,6 +689,18 @@ tr:last-child td {
 	justify-content: flex-end;
 	gap: 10px;
 	padding-top: 4px;
+}
+
+.form-grid > .form-error {
+	grid-column: 1 / -1;
+}
+
+.detail-list > .field-group {
+	margin-top: 18px;
+}
+
+.detail-list > .form-actions {
+	padding-top: 16px;
 }
 
 .detail-list {

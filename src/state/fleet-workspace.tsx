@@ -21,8 +21,13 @@ interface FleetWorkspaceState {
 	reloadWorkspace: () => Promise<void>
 	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>) => Promise<void>
 	createVehicle: (vehicle: Omit<Vehicle, 'id' | 'monthlySpend'>) => Promise<void>
+	createTransaction: (transaction: Omit<Transaction, 'id' | 'status'>) => Promise<Transaction>
 	updateDriver: (driver: Driver) => Promise<void>
 	updateVehicle: (vehicle: Vehicle) => Promise<void>
+	updateTransaction: (
+		transactionId: string,
+		review: Pick<Transaction, 'status' | 'expenseType'>,
+	) => Promise<Transaction>
 	toggleService: (serviceId: MobilityService['id']) => Promise<void>
 }
 
@@ -157,6 +162,21 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				setDrivers((current) => assignVehicleDriver(current, createdVehicle))
 				setVehicles((current) => [...current, createdVehicle])
 			},
+			createTransaction: async (transaction) => {
+				if (hasFleetApi()) {
+					const created = await fleetApi.createTransaction(transaction)
+					setTransactions((current) => [created, ...current])
+					return created
+				}
+
+				const created: Transaction = {
+					...transaction,
+					id: nextId('transaction'),
+					status: 'pending',
+				}
+				setTransactions((current) => [created, ...current])
+				return created
+			},
 			updateDriver: async (driver) => {
 				if (hasFleetApi()) {
 					await fleetApi.updateDriver(driver)
@@ -174,6 +194,21 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				}
 				setDrivers((current) => assignVehicleDriver(current, vehicle))
 				setVehicles((current) => current.map((item) => (item.id === vehicle.id ? vehicle : item)))
+			},
+			updateTransaction: async (transactionId, review) => {
+				if (hasFleetApi()) {
+					const updated = await fleetApi.updateTransaction(transactionId, review)
+					setTransactions((current) => current.map((item) => (item.id === transactionId ? updated : item)))
+					return updated
+				}
+
+				const existing = transactions.find((transaction) => transaction.id === transactionId)
+				if (!existing) {
+					throw new Error('Transaction not found')
+				}
+				const updated = { ...existing, ...review }
+				setTransactions((current) => current.map((item) => (item.id === transactionId ? updated : item)))
+				return updated
 			},
 			toggleService: async (serviceId) => {
 				if (hasFleetApi()) {
