@@ -11,6 +11,13 @@ export const registrationMetadataSchema = z.object({
 	registration_intent: z.literal('company_admin'),
 })
 
+export const teamInvitationSchema = z.object({
+	name: z.string().trim().min(2).max(100),
+	email: z.string().email().transform((email) => email.trim().toLowerCase()),
+	role: z.enum(['manager', 'finance', 'support']),
+	redirectUrl: z.string().url(),
+})
+
 export const driverPayloadSchema = z.object({
 	name: z.string().min(1),
 	email: z.string().email(),

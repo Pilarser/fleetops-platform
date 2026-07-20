@@ -14,6 +14,15 @@ export interface SessionUser {
 	email: string
 	role: UserRole
 	companyName: string
+	membershipStatus?: 'active' | 'invited'
+}
+
+export interface TeamMember {
+	id: string
+	name: string
+	email: string
+	role: UserRole
+	status: 'active' | 'invited'
 }
 
 export interface Vehicle {

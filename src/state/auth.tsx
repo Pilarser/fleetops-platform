@@ -12,10 +12,12 @@ interface AuthState {
 	isAuthenticating: boolean
 	isInitializing: boolean
 	isRegistering: boolean
+	mustSetPassword: boolean
 	user: SessionUser | null
 	login: (credentials: { email: string; password: string }) => Promise<void>
 	registerCompany: (registration: CompanyRegistration) => Promise<{ requiresEmailVerification: boolean }>
 	resendVerification: (email: string) => Promise<void>
+	completeInvitation: (password: string) => Promise<void>
 	logout: () => void
 }
 
@@ -72,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
 	const [isInitializing, setIsInitializing] = useState(usesHostedAuth)
 	const [isRegistering, setIsRegistering] = useState(false)
+	const [mustSetPassword, setMustSetPassword] = useState(false)
 
 	useEffect(() => {
 		const auth = supabaseAuth
@@ -90,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				fleetApi.setToken(null)
 				clearStoredUser()
 				setUser(null)
+				setMustSetPassword(false)
 				setIsInitializing(false)
 				return
 			}
@@ -101,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				if (!cancelled) {
 					storeUser(sessionUser)
 					setUser(sessionUser)
+					setMustSetPassword(sessionUser.membershipStatus === 'invited')
 				}
 			} catch {
 				await auth.auth.signOut()
@@ -108,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					fleetApi.setToken(null)
 					clearStoredUser()
 					setUser(null)
+					setMustSetPassword(false)
 				}
 			} finally {
 				if (!cancelled) {
@@ -121,9 +127,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			fleetApi.setToken(session?.access_token ?? null)
 			if (session) {
 				localStorage.removeItem(tokenStorageKey)
+				void loadHostedUser()
+					.then((sessionUser) => {
+						if (!cancelled) {
+							storeUser(sessionUser)
+							setUser(sessionUser)
+							setMustSetPassword(sessionUser.membershipStatus === 'invited')
+							setIsInitializing(false)
+						}
+					})
+					.catch(() => {
+						if (!cancelled) {
+							clearStoredUser()
+							setUser(null)
+							setMustSetPassword(false)
+							setIsInitializing(false)
+						}
+					})
 			} else {
 				clearStoredUser()
 				setUser(null)
+				setMustSetPassword(false)
 			}
 		})
 
@@ -139,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			isAuthenticating,
 			isInitializing,
 			isRegistering,
+			mustSetPassword,
 			user,
 			login: async ({ email, password }) => {
 				setIsAuthenticating(true)
@@ -166,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 						fleetApi.setToken(session.token)
 						storeUser(session.user)
 						setUser(session.user)
+						setMustSetPassword(session.user.membershipStatus === 'invited')
 						return
 					}
 
@@ -186,6 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					}
 					storeUser(sessionUser)
 					setUser(sessionUser)
+					setMustSetPassword(false)
 				} finally {
 					setIsAuthenticating(false)
 				}
@@ -240,16 +267,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					throw error
 				}
 			},
+			completeInvitation: async (password) => {
+				if (!supabaseAuth) {
+					throw new Error('Supabase authentication is not configured')
+				}
+				const { error } = await supabaseAuth.auth.updateUser({
+					password,
+					data: { invitation_pending: false },
+				})
+				if (error) {
+					throw error
+				}
+				const sessionUser = await fleetApi.acceptInvitation()
+				storeUser(sessionUser)
+				setUser(sessionUser)
+				setMustSetPassword(false)
+			},
 			logout: () => {
 				fleetApi.setToken(null)
 				clearStoredUser()
 				setUser(null)
+				setMustSetPassword(false)
 				if (supabaseAuth) {
 					void supabaseAuth.auth.signOut()
 				}
 			},
 		}),
-		[isAuthenticating, isInitializing, isRegistering, user],
+		[isAuthenticating, isInitializing, isRegistering, mustSetPassword, user],
 	)
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

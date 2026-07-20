@@ -11,6 +11,8 @@ import { ServicesPage } from './pages/services'
 import { TransactionsPage } from './pages/transactions'
 import { VehiclesPage } from './pages/vehicles'
 import { LoginPage } from './pages/login'
+import { SetPasswordPage } from './pages/set-password'
+import { TeamPage } from './pages/team'
 import { AuthProvider, useAuth } from './state/auth'
 import { FleetWorkspaceProvider, useFleetWorkspace } from './state/fleet-workspace'
 import { Button } from './components/ui'
@@ -24,7 +26,7 @@ export default function App() {
 }
 
 function AuthenticatedApp() {
-	const { isAuthenticated, isInitializing } = useAuth()
+	const { isAuthenticated, isInitializing, mustSetPassword } = useAuth()
 
 	if (isInitializing) {
 		return (
@@ -41,6 +43,10 @@ function AuthenticatedApp() {
 				<Route path="*" element={<LoginPage />} />
 			</Routes>
 		)
+	}
+
+	if (mustSetPassword) {
+		return <SetPasswordPage />
 	}
 
 	return (
@@ -79,6 +85,7 @@ function WorkspaceApp() {
 					<Route path="/services" element={<ServicesPage />} />
 					<Route path="/providers" element={<ProvidersPage />} />
 					<Route path="/reports" element={<ReportsPage />} />
+					<Route path="/team" element={<TeamPage />} />
 					<Route path="*" element={<NotFoundPage />} />
 				</Routes>
 			)}

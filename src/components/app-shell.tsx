@@ -7,11 +7,13 @@ import {
 	MapPinned,
 	Settings2,
 	Users,
+	UsersRound,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Button } from './ui'
 import { useAuth } from '../state/auth'
+import { hasSupabaseAuth } from '../services/supabase-auth'
 
 const navItems = [
 	{ to: '/', label: 'Dashboard', icon: Gauge },
@@ -25,6 +27,9 @@ const navItems = [
 
 export function AppShell({ children }: { children: ReactNode }) {
 	const { logout, user } = useAuth()
+	const visibleNavItems = user?.role === 'fleet_admin' && hasSupabaseAuth()
+		? [...navItems, { to: '/team', label: 'Team', icon: UsersRound }]
+		: navItems
 
 	return (
 		<div className="app-shell">
@@ -40,7 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 				</div>
 
 				<nav className="nav">
-					{navItems.map((item) => {
+					{visibleNavItems.map((item) => {
 						const Icon = item.icon
 						return (
 							<NavLink key={item.to} to={item.to} end={item.to === '/'}>

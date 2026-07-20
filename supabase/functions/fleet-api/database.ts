@@ -147,6 +147,19 @@ export async function getWorkspace(companyId: string) {
 	}
 }
 
+export async function getTeam(companyId: string) {
+	const members = await sql`
+		select id, name, email, role, status
+		from "User"
+		where "companyId" = ${companyId}
+		order by case when role = 'fleet_admin' then 0 else 1 end, name asc
+	`
+	return members.map((member) => ({
+		...member,
+		status: member.status === 'invited' ? 'invited' : 'active',
+	}))
+}
+
 async function ensureVehicleBelongsToCompany(transaction: TransactionSql, vehicleId: string, companyId: string) {
 	if (!vehicleId) {
 		return

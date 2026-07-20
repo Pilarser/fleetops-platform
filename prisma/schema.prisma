@@ -33,6 +33,7 @@ model User {
   email     String   @unique
   password  String?
   role      String
+  status    String   @default("active")
   company   Company  @relation(fields: [companyId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

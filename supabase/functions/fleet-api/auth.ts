@@ -12,11 +12,13 @@ export interface SessionUser {
 	email: string
 	role: UserRole
 	companyName: string
+	membershipStatus: 'active' | 'invited'
 }
 
 export interface AuthenticatedProfile extends SessionUser {
 	authUserId: string
 	companyId: string
+	status: 'active' | 'invited'
 }
 
 type ProfileRecord = {
@@ -27,6 +29,7 @@ type ProfileRecord = {
 	email: string
 	password: string | null
 	role: string
+	status: string
 	companyName: string
 }
 
@@ -101,13 +104,15 @@ function mapProfile(record: ProfileRecord): AuthenticatedProfile {
 		name: record.name,
 		email: record.email,
 		role,
+		status: record.status === 'invited' ? 'invited' : 'active',
+		membershipStatus: record.status === 'invited' ? 'invited' : 'active',
 		companyName: record.companyName,
 	}
 }
 
 async function findProfileByAuthUserId(authUserId: string) {
 	const [record] = await sql<ProfileRecord[]>`
-		select u.id, u."authUserId", u."companyId", u.name, u.email, u.password, u.role, c.name as "companyName"
+		select u.id, u."authUserId", u."companyId", u.name, u.email, u.password, u.role, u.status, c.name as "companyName"
 		from "User" u
 		join "Company" c on c.id = u."companyId"
 		where u."authUserId" = ${authUserId}
@@ -126,7 +131,7 @@ async function authenticatedIdentity(request: Request) {
 
 async function findLegacyProfile(email: string) {
 	const [record] = await sql<ProfileRecord[]>`
-		select u.id, u."authUserId", u."companyId", u.name, u.email, u.password, u.role, c.name as "companyName"
+		select u.id, u."authUserId", u."companyId", u.name, u.email, u.password, u.role, u.status, c.name as "companyName"
 		from "User" u
 		join "Company" c on c.id = u."companyId"
 		where lower(u.email) = ${email}
@@ -224,6 +229,55 @@ export async function login(emailValue: string, password: string) {
 	return { profile: migrated.profile, session: migrated.session }
 }
 
+export async function inviteCompanyMember(
+	session: AuthenticatedProfile,
+	payload: { name: string; email: string; role: 'manager' | 'finance' | 'support'; redirectUrl: string },
+) {
+	const [existingProfile] = await sql`select id from "User" where lower(email) = ${payload.email} limit 1`
+	if (existingProfile) {
+		throw new ApiError(409, 'A user profile already exists for this email')
+	}
+
+	const admin = adminClient()
+	const { data, error } = await admin.auth.admin.inviteUserByEmail(payload.email, {
+		data: {
+			company_id: session.companyId,
+			invitation_pending: true,
+			name: payload.name,
+			role: payload.role,
+		},
+		redirectTo: payload.redirectUrl,
+	})
+	if (error || !data.user) {
+		throw new ApiError(409, error?.message ?? 'Unable to invite this user')
+	}
+
+	const profileId = `user-${crypto.randomUUID()}`
+	try {
+		const [member] = await sql`
+			insert into "User" (id, "authUserId", "companyId", name, email, password, role, status, "createdAt", "updatedAt")
+			values (${profileId}, ${data.user.id}, ${session.companyId}, ${payload.name}, ${payload.email}, null, ${payload.role}, 'invited', now(), now())
+			returning id, name, email, role, status
+		`
+		return member
+	} catch (profileError) {
+		await admin.auth.admin.deleteUser(data.user.id).catch(() => undefined)
+		throw profileError
+	}
+}
+
+export async function activateInvitation(session: AuthenticatedProfile) {
+	const [member] = await sql`
+		update "User"
+		set status = 'active', "updatedAt" = now()
+		where id = ${session.id} and "companyId" = ${session.companyId}
+		returning id
+	`
+	if (!member) {
+		throw new ApiError(404, 'Membership not found')
+	}
+}
+
 function bearerToken(request: Request) {
 	const authorization = request.headers.get('authorization')
 	if (!authorization?.startsWith('Bearer ')) {
@@ -290,6 +344,9 @@ export async function completeCompanyRegistration(request: Request) {
 }
 
 export function requireRole(session: AuthenticatedProfile, roles: UserRole[]) {
+	if (session.status !== 'active') {
+		throw new ApiError(403, 'Invitation setup is incomplete')
+	}
 	if (!roles.includes(session.role)) {
 		throw new ApiError(403, 'Insufficient permissions')
 	}
@@ -302,6 +359,7 @@ export function toSessionUser(session: AuthenticatedProfile): SessionUser {
 		email: session.email,
 		role: session.role,
 		companyName: session.companyName,
+		membershipStatus: session.status,
 	}
 }
 

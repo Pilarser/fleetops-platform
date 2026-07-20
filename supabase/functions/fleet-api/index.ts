@@ -1,5 +1,7 @@
 import {
+	activateInvitation,
 	completeCompanyRegistration,
+	inviteCompanyMember,
 	login,
 	requireRole,
 	requireSession,
@@ -11,6 +13,7 @@ import {
 	createTransaction,
 	createVehicle,
 	getWorkspace,
+	getTeam,
 	toggleService,
 	updateDriver,
 	updateTransaction,
@@ -21,6 +24,7 @@ import {
 	driverPayloadSchema,
 	loginSchema,
 	serviceIdSchema,
+	teamInvitationSchema,
 	transactionPayloadSchema,
 	transactionReviewSchema,
 	vehiclePayloadSchema,
@@ -64,6 +68,26 @@ Deno.serve(async (request) => {
 
 		if (request.method === 'GET' && path === '/auth/me') {
 			return json(toSessionUser(session))
+		}
+
+		if (request.method === 'POST' && path === '/auth/accept-invitation') {
+			await activateInvitation(session)
+			return json(toSessionUser({ ...session, status: 'active' }))
+		}
+
+		if (request.method === 'GET' && path === '/team') {
+			requireRole(session, ['fleet_admin'])
+			return json(await getTeam(session.companyId))
+		}
+
+		if (request.method === 'POST' && path === '/team/invitations') {
+			requireRole(session, ['fleet_admin'])
+			const payload = teamInvitationSchema.parse(await readJson(request))
+			const origin = request.headers.get('origin')
+			if (!origin || new URL(payload.redirectUrl).origin !== origin) {
+				throw new ApiError(400, 'Invalid invitation redirect URL')
+			}
+			return json(await inviteCompanyMember(session, payload), 201)
 		}
 
 		if (request.method === 'GET' && path === '/workspace') {
