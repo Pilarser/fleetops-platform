@@ -138,6 +138,47 @@ a {
 	padding: 28px;
 }
 
+.workspace-state {
+	min-height: calc(100vh - 124px);
+	display: grid;
+	place-items: center;
+	align-content: center;
+	gap: 10px;
+	color: #667085;
+	text-align: center;
+}
+
+.workspace-state strong {
+	color: #17202a;
+	font-size: 16px;
+}
+
+.workspace-state span {
+	max-width: 520px;
+	font-size: 13px;
+}
+
+.workspace-state .button {
+	gap: 8px;
+	margin-top: 6px;
+}
+
+.workspace-spinner {
+	animation: workspace-spin 0.8s linear infinite;
+}
+
+@keyframes workspace-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.workspace-spinner {
+		animation: none;
+	}
+}
+
 .login-shell {
 	min-height: 100vh;
 	display: grid;

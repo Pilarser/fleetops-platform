@@ -1,14 +1,24 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react'
-import { drivers as initialDrivers, services as initialServices, transactions, vehicles as initialVehicles } from '../data/mock-data'
-import { fleetApi, hasFleetApi } from '../services/fleet-api'
-import type { Driver, MobilityService, Vehicle } from '../types'
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import {
+	drivers as initialDrivers,
+	providers as initialProviders,
+	services as initialServices,
+	transactions as initialTransactions,
+	vehicles as initialVehicles,
+} from '../data/mock-data'
+import { fleetApi, hasFleetApi, type FleetWorkspacePayload } from '../services/fleet-api'
+import type { Driver, MobilityService, ProviderLocation, Transaction, Vehicle } from '../types'
 
 interface FleetWorkspaceState {
 	apiMode: 'connected' | 'local'
 	drivers: Driver[]
+	isLoading: boolean
+	loadError: string | null
+	providers: ProviderLocation[]
 	services: MobilityService[]
-	transactions: typeof transactions
+	transactions: Transaction[]
 	vehicles: Vehicle[]
+	reloadWorkspace: () => Promise<void>
 	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>) => Promise<void>
 	createVehicle: (vehicle: Omit<Vehicle, 'id' | 'monthlySpend'>) => Promise<void>
 	updateDriver: (driver: Driver) => Promise<void>
@@ -63,50 +73,59 @@ function applyDriverToVehicles(vehicles: Vehicle[], driver: Driver) {
 }
 
 export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
-	const apiMode = hasFleetApi() ? 'connected' : 'local'
-	const [drivers, setDrivers] = useState(initialDrivers)
-	const [vehicles, setVehicles] = useState(initialVehicles)
-	const [services, setServices] = useState(initialServices)
+	const isConnected = hasFleetApi()
+	const apiMode = isConnected ? 'connected' : 'local'
+	const [drivers, setDrivers] = useState<Driver[]>(() => (isConnected ? [] : initialDrivers))
+	const [providers, setProviders] = useState<ProviderLocation[]>(() => (isConnected ? [] : initialProviders))
+	const [services, setServices] = useState<MobilityService[]>(() => (isConnected ? [] : initialServices))
+	const [transactions, setTransactions] = useState<Transaction[]>(() => (isConnected ? [] : initialTransactions))
+	const [vehicles, setVehicles] = useState<Vehicle[]>(() => (isConnected ? [] : initialVehicles))
+	const [isLoading, setIsLoading] = useState(isConnected)
+	const [loadError, setLoadError] = useState<string | null>(null)
 
-	useEffect(() => {
-		if (!hasFleetApi()) {
+	const applyWorkspace = useCallback((workspace: FleetWorkspacePayload) => {
+		setDrivers(workspace.drivers)
+		setProviders(workspace.providers)
+		setServices(workspace.services)
+		setTransactions(workspace.transactions)
+		setVehicles(workspace.vehicles)
+	}, [])
+
+	const reloadWorkspace = useCallback(async () => {
+		if (!isConnected) {
 			return
 		}
 
-		let cancelled = false
-		fleetApi
-			.getWorkspace()
-			.then((workspace) => {
-				if (cancelled) {
-					return
-				}
-				setDrivers(workspace.drivers)
-				setServices(workspace.services)
-				setVehicles(workspace.vehicles)
-			})
-			.catch((error: unknown) => {
-				console.warn('Unable to load Fleet API workspace, using local demo data.', error)
-			})
-
-		return () => {
-			cancelled = true
+		setIsLoading(true)
+		setLoadError(null)
+		try {
+			applyWorkspace(await fleetApi.getWorkspace())
+		} catch (error) {
+			setLoadError(error instanceof Error ? error.message : 'Unable to load the fleet workspace')
+		} finally {
+			setIsLoading(false)
 		}
-	}, [])
+	}, [applyWorkspace, isConnected])
+
+	useEffect(() => {
+		void reloadWorkspace()
+	}, [reloadWorkspace])
 
 	async function refreshWorkspace() {
-		const workspace = await fleetApi.getWorkspace()
-		setDrivers(workspace.drivers)
-		setServices(workspace.services)
-		setVehicles(workspace.vehicles)
+		applyWorkspace(await fleetApi.getWorkspace())
 	}
 
 	const value = useMemo<FleetWorkspaceState>(
 		() => ({
 			apiMode,
 			drivers,
+			isLoading,
+			loadError,
+			providers,
 			services,
 			transactions,
 			vehicles,
+			reloadWorkspace,
 			createDriver: async (driver) => {
 				if (hasFleetApi()) {
 					await fleetApi.createDriver(driver)
@@ -168,7 +187,7 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				)
 			},
 		}),
-		[apiMode, drivers, services, vehicles],
+		[apiMode, drivers, isLoading, loadError, providers, reloadWorkspace, services, transactions, vehicles],
 	)
 
 	return <FleetWorkspaceContext.Provider value={value}>{children}</FleetWorkspaceContext.Provider>

@@ -1,3 +1,4 @@
+import { AlertTriangle, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/app-shell'
 import { DashboardPage } from './pages/dashboard'
@@ -10,7 +11,8 @@ import { TransactionsPage } from './pages/transactions'
 import { VehiclesPage } from './pages/vehicles'
 import { LoginPage } from './pages/login'
 import { AuthProvider, useAuth } from './state/auth'
-import { FleetWorkspaceProvider } from './state/fleet-workspace'
+import { FleetWorkspaceProvider, useFleetWorkspace } from './state/fleet-workspace'
+import { Button } from './components/ui'
 
 export default function App() {
 	return (
@@ -29,7 +31,32 @@ function AuthenticatedApp() {
 
 	return (
 		<FleetWorkspaceProvider>
-			<AppShell>
+			<WorkspaceApp />
+		</FleetWorkspaceProvider>
+	)
+}
+
+function WorkspaceApp() {
+	const { isLoading, loadError, reloadWorkspace } = useFleetWorkspace()
+
+	return (
+		<AppShell>
+			{isLoading ? (
+				<div className="workspace-state" role="status" aria-live="polite">
+					<LoaderCircle className="workspace-spinner" size={28} />
+					<strong>Loading workspace</strong>
+				</div>
+			) : loadError ? (
+				<div className="workspace-state" role="alert">
+					<AlertTriangle size={28} />
+					<strong>Unable to load workspace</strong>
+					<span>{loadError}</span>
+					<Button type="button" onClick={() => void reloadWorkspace()}>
+						<RefreshCw size={16} />
+						Retry
+					</Button>
+				</div>
+			) : (
 				<Routes>
 					<Route path="/" element={<DashboardPage />} />
 					<Route path="/vehicles" element={<VehiclesPage />} />
@@ -40,7 +67,7 @@ function AuthenticatedApp() {
 					<Route path="/reports" element={<ReportsPage />} />
 					<Route path="*" element={<NotFoundPage />} />
 				</Routes>
-			</AppShell>
-		</FleetWorkspaceProvider>
+			)}
+		</AppShell>
 	)
 }

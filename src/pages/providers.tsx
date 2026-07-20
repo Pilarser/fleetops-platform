@@ -1,16 +1,15 @@
 import { Badge, Card, PageHeader, Table } from '../components/ui'
-import { providers } from '../data/mock-data'
 import { useFleetWorkspace } from '../state/fleet-workspace'
 import { getServiceLabel, statusTone } from './helpers'
 
 export function ProvidersPage() {
-	const { services } = useFleetWorkspace()
+	const { providers, services } = useFleetWorkspace()
 
 	return (
 		<>
 			<PageHeader
 				title="Providers"
-				description="Mock provider locations for the future map and service availability layer."
+				description="Provider locations and current service availability."
 			/>
 			<div className="provider-layout">
 				<Card className="map-card">
