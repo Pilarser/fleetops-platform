@@ -174,13 +174,24 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 			}
 
 			if (method === 'PATCH' && url.pathname.startsWith('/api/transactions/')) {
-				if (!requireRole(request, response, [...transactionReviewRoles])) {
+				const reviewer = requireRole(request, response, [...transactionReviewRoles])
+				if (!reviewer) {
 					return
 				}
 				const id = decodeURIComponent(url.pathname.replace('/api/transactions/', ''))
 				const payload = transactionReviewSchema.parse(await readBody(request))
 				const current = (await store.getWorkspace()).transactions.find((transaction) => transaction.id === id)
-				const updatedTransaction = current ? await store.updateTransaction({ ...current, ...payload, id }) : undefined
+				const updatedTransaction = current
+					? await store.updateTransaction({
+							...current,
+							...payload,
+							id,
+							reviewedById: reviewer.id,
+							reviewedByName: reviewer.name,
+							reviewedAt: new Date().toISOString(),
+							rejectionReason: payload.status === 'rejected' ? payload.rejectionReason : null,
+						})
+					: undefined
 				if (!updatedTransaction) {
 					sendJson(response, 404, { message: 'Transaction not found' })
 					return

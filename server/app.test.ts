@@ -286,6 +286,37 @@ describe('fleet API', () => {
 		const reviewed = updatedWorkspace.transactions.find((transaction) => transaction.id === created.id)
 		assert.equal(reviewed?.status, 'approved')
 		assert.equal(reviewed?.expenseType, 'personal')
+		assert.equal(reviewed?.reviewedById, 'user-admin')
+		assert.equal(reviewed?.reviewedByName, 'Fleet Manager')
+		assert.ok(reviewed?.reviewedAt)
+		assert.equal(reviewed?.rejectionReason, null)
+
+		const invalidRejectionResponse = await fetch(`${baseUrl}/api/transactions/${created.id}`, {
+			method: 'PATCH',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({ status: 'rejected', expenseType: 'personal' }),
+		})
+		assert.equal(invalidRejectionResponse.status, 400)
+
+		const rejectionResponse = await fetch(`${baseUrl}/api/transactions/${created.id}`, {
+			method: 'PATCH',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				status: 'rejected',
+				expenseType: 'personal',
+				rejectionReason: 'Receipt does not match the submitted amount',
+			}),
+		})
+		assert.equal(rejectionResponse.status, 200)
+		const rejected = (await rejectionResponse.json()) as { status: string; rejectionReason: string }
+		assert.equal(rejected.status, 'rejected')
+		assert.equal(rejected.rejectionReason, 'Receipt does not match the submitted amount')
 	})
 
 	it('rejects transactions with fleet references that do not exist', async () => {

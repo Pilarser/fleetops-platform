@@ -26,7 +26,11 @@ interface FleetWorkspaceState {
 	updateVehicle: (vehicle: Vehicle) => Promise<void>
 	updateTransaction: (
 		transactionId: string,
-		review: Pick<Transaction, 'status' | 'expenseType'>,
+		review: {
+			status: 'approved' | 'rejected'
+			expenseType: Transaction['expenseType']
+			rejectionReason?: string
+		},
 	) => Promise<Transaction>
 	toggleService: (serviceId: MobilityService['id']) => Promise<void>
 }

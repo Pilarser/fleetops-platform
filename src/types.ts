@@ -70,4 +70,8 @@ export interface Transaction {
 	vat: number
 	status: TransactionStatus
 	expenseType: 'business' | 'personal'
+	reviewedById?: string | null
+	reviewedByName?: string | null
+	reviewedAt?: string | null
+	rejectionReason?: string | null
 }

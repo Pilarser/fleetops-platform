@@ -60,6 +60,7 @@ export function TransactionsPage() {
 	const [createError, setCreateError] = useState<string | null>(null)
 	const [isCreating, setIsCreating] = useState(false)
 	const [reviewExpenseType, setReviewExpenseType] = useState<Transaction['expenseType']>('business')
+	const [reviewReason, setReviewReason] = useState('')
 	const [reviewError, setReviewError] = useState<string | null>(null)
 	const [isReviewing, setIsReviewing] = useState(false)
 
@@ -105,6 +106,7 @@ export function TransactionsPage() {
 	function openDetails(transaction: Transaction) {
 		setSelectedTransaction(transaction)
 		setReviewExpenseType(transaction.expenseType)
+		setReviewReason(transaction.rejectionReason ?? '')
 		setReviewError(null)
 	}
 
@@ -133,17 +135,23 @@ export function TransactionsPage() {
 		}
 	}
 
-	async function reviewTransaction(status: TransactionStatus) {
+	async function reviewTransaction(status: 'approved' | 'rejected') {
 		if (!selectedTransaction) return
 		setReviewError(null)
+		if (status === 'rejected' && !reviewReason.trim()) {
+			setReviewError('Enter a reason before rejecting this transaction.')
+			return
+		}
 		setIsReviewing(true)
 		try {
 			const updated = await updateTransaction(selectedTransaction.id, {
 				status,
 				expenseType: reviewExpenseType,
+				rejectionReason: status === 'rejected' ? reviewReason.trim() : undefined,
 			})
 			setSelectedTransaction(updated)
 			setReviewExpenseType(updated.expenseType)
+			setReviewReason(updated.rejectionReason ?? '')
 		} catch (error) {
 			setReviewError(error instanceof Error ? error.message : 'Unable to review the transaction')
 		} finally {
@@ -313,6 +321,9 @@ export function TransactionsPage() {
 						<Detail label="VAT" value={formatCurrency(selectedTransaction.vat)} />
 						<Detail label="Amount" value={formatCurrency(selectedTransaction.amount)} />
 						<Detail label="Status" value={selectedTransaction.status} />
+						{selectedTransaction.reviewedByName ? <Detail label="Reviewed by" value={selectedTransaction.reviewedByName} /> : null}
+						{selectedTransaction.reviewedAt ? <Detail label="Reviewed at" value={new Date(selectedTransaction.reviewedAt).toLocaleString()} /> : null}
+						{selectedTransaction.rejectionReason ? <Detail label="Rejection reason" value={selectedTransaction.rejectionReason} /> : null}
 						{canReview ? (
 							<>
 								<Field label="Expense classification">
@@ -320,6 +331,16 @@ export function TransactionsPage() {
 										<option value="business">Business</option>
 										<option value="personal">Personal</option>
 									</SelectInput>
+								</Field>
+								<Field label="Rejection reason">
+									<textarea
+										className="field"
+										maxLength={500}
+										placeholder="Required when rejecting"
+										rows={3}
+										value={reviewReason}
+										onChange={(event) => setReviewReason(event.target.value)}
+									/>
 								</Field>
 								{reviewError ? <p className="form-error">{reviewError}</p> : null}
 								<div className="form-actions">

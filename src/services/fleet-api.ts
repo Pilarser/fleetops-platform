@@ -87,7 +87,14 @@ export const fleetApi = {
 			method: 'PATCH',
 			body: JSON.stringify(vehicle),
 		}),
-	updateTransaction: (transactionId: string, review: Pick<Transaction, 'status' | 'expenseType'>) =>
+	updateTransaction: (
+		transactionId: string,
+		review: {
+			status: 'approved' | 'rejected'
+			expenseType: Transaction['expenseType']
+			rejectionReason?: string
+		},
+	) =>
 		request<Transaction>(`/transactions/${transactionId}`, {
 			method: 'PATCH',
 			body: JSON.stringify(review),

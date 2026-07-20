@@ -113,7 +113,7 @@ Deno.serve(async (request) => {
 			requireRole(session, [...transactionReviewRoles])
 			const transactionId = decodeURIComponent(path.slice('/transactions/'.length))
 			const payload = transactionReviewSchema.parse(await readJson(request))
-			return json(await updateTransaction(session.companyId, transactionId, payload))
+			return json(await updateTransaction(session.companyId, transactionId, payload, session))
 		}
 
 		throw new ApiError(404, 'Not found')

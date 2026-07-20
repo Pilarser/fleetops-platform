@@ -102,18 +102,22 @@ model ProviderLocation {
 }
 
 model FleetTransaction {
-  id          String   @id
-  companyId   String
-  date        String
-  driverId    String
-  vehicleId   String
-  service     String
-  provider    String
-  amount      Float
-  vat         Float
-  status      String
-  expenseType String
-  company     Company  @relation(fields: [companyId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String    @id
+  companyId       String
+  date            String
+  driverId        String
+  vehicleId       String
+  service         String
+  provider        String
+  amount          Float
+  vat             Float
+  status          String
+  expenseType     String
+  reviewedById    String?
+  reviewedByName  String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+  company         Company   @relation(fields: [companyId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }

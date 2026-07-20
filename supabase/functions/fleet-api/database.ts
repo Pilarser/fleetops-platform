@@ -59,6 +59,10 @@ type DbTransaction = {
 	vat: number
 	status: string
 	expenseType: string
+	reviewedById: string | null
+	reviewedByName: string | null
+	reviewedAt: Date | string | null
+	rejectionReason: string | null
 }
 
 type TransactionPayload = {
@@ -73,8 +77,14 @@ type TransactionPayload = {
 }
 
 type TransactionReview = {
-	status: 'pending' | 'approved' | 'rejected'
+	status: 'approved' | 'rejected'
 	expenseType: 'business' | 'personal'
+	rejectionReason?: string
+}
+
+type TransactionReviewer = {
+	id: string
+	name: string
 }
 
 export function mapDriver(driver: DbDriver) {
@@ -110,6 +120,8 @@ function mapTransaction(transaction: DbTransaction) {
 		...transaction,
 		amount: Number(transaction.amount),
 		vat: Number(transaction.vat),
+		reviewedAt:
+			transaction.reviewedAt instanceof Date ? transaction.reviewedAt.toISOString() : transaction.reviewedAt,
 	}
 }
 
@@ -120,7 +132,7 @@ export async function getWorkspace(companyId: string) {
 		>`select id, name, email, status, "vehicleId", "costCenter", "monthlySpend", "personalSpend" from "Driver" where "companyId" = ${companyId} order by name asc`,
 		sql`select id, name, service, address, city, "distanceKm", status from "ProviderLocation" where "companyId" = ${companyId} order by name asc`,
 		sql`select type as id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} order by name asc`,
-		sql<DbTransaction[]>`select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
+		sql<DbTransaction[]>`select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
 		sql<
 			DbVehicle[]
 		>`select id, plate, make, model, "fuelType", status, "costCenter", "monthlySpend", "mileageKm" from "Vehicle" where "companyId" = ${companyId} order by plate asc`,
@@ -265,18 +277,29 @@ export async function createTransaction(companyId: string, payload: TransactionP
 		const [created] = await transaction<DbTransaction[]>`
 			insert into "FleetTransaction" (id, "companyId", date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "createdAt", "updatedAt")
 			values (${id}, ${companyId}, ${payload.date}, ${payload.driverId}, ${payload.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, 'pending', ${payload.expenseType}, now(), now())
-			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType"
+			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
 		`
 		return mapTransaction(created)
 	})
 }
 
-export async function updateTransaction(companyId: string, transactionId: string, payload: TransactionReview) {
+export async function updateTransaction(
+	companyId: string,
+	transactionId: string,
+	payload: TransactionReview,
+	reviewer: TransactionReviewer,
+) {
 	const [updated] = await sql<DbTransaction[]>`
 		update "FleetTransaction"
-		set status = ${payload.status}, "expenseType" = ${payload.expenseType}, "updatedAt" = now()
+		set status = ${payload.status},
+			"expenseType" = ${payload.expenseType},
+			"reviewedById" = ${reviewer.id},
+			"reviewedByName" = ${reviewer.name},
+			"reviewedAt" = now(),
+			"rejectionReason" = ${payload.status === 'rejected' ? payload.rejectionReason ?? null : null},
+			"updatedAt" = now()
 		where id = ${transactionId} and "companyId" = ${companyId}
-		returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType"
+		returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
 	`
 	if (!updated) {
 		throw new ApiError(404, 'Transaction not found')

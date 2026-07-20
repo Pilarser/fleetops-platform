@@ -45,7 +45,14 @@ export const transactionPayloadSchema = z
 	})
 	.refine((payload) => payload.vat <= payload.amount, { message: 'VAT cannot exceed the transaction amount', path: ['vat'] })
 
-export const transactionReviewSchema = z.object({
-	status: z.enum(['pending', 'approved', 'rejected']),
-	expenseType: z.enum(['business', 'personal']),
-})
+export const transactionReviewSchema = z
+	.object({
+		status: z.enum(['approved', 'rejected']),
+		expenseType: z.enum(['business', 'personal']),
+		rejectionReason: z.string().trim().max(500).optional(),
+	})
+	.superRefine((payload, context) => {
+		if (payload.status === 'rejected' && !payload.rejectionReason) {
+			context.addIssue({ code: 'custom', message: 'A rejection reason is required', path: ['rejectionReason'] })
+		}
+	})

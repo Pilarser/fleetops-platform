@@ -138,6 +138,10 @@ function mapTransaction(transaction: PrismaFleetTransaction): Transaction {
 		vat: transaction.vat,
 		status: normalizeTransactionStatus(transaction.status),
 		expenseType: normalizeExpenseType(transaction.expenseType),
+		reviewedById: transaction.reviewedById,
+		reviewedByName: transaction.reviewedByName,
+		reviewedAt: transaction.reviewedAt?.toISOString() ?? null,
+		rejectionReason: transaction.rejectionReason,
 	}
 }
 
@@ -215,6 +219,10 @@ export function createPrismaFleetStore(): FleetStore {
 					vat: transaction.vat,
 					status: transaction.status,
 					expenseType: transaction.expenseType,
+					reviewedById: transaction.reviewedById,
+					reviewedByName: transaction.reviewedByName,
+					reviewedAt: transaction.reviewedAt ? new Date(transaction.reviewedAt) : null,
+					rejectionReason: transaction.rejectionReason,
 				},
 			})
 			return mapTransaction(createdTransaction)
@@ -302,6 +310,10 @@ export function createPrismaFleetStore(): FleetStore {
 					data: {
 						status: transaction.status,
 						expenseType: transaction.expenseType,
+						reviewedById: transaction.reviewedById,
+						reviewedByName: transaction.reviewedByName,
+						reviewedAt: transaction.reviewedAt ? new Date(transaction.reviewedAt) : null,
+						rejectionReason: transaction.rejectionReason,
 					},
 				})
 				return mapTransaction(updatedTransaction)
