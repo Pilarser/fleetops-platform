@@ -18,6 +18,10 @@ export const teamInvitationSchema = z.object({
 	redirectUrl: z.string().url(),
 })
 
+export const driverInvitationSchema = z.object({
+	redirectUrl: z.string().url(),
+})
+
 export const driverPayloadSchema = z.object({
 	name: z.string().min(1),
 	email: z.string().email(),

@@ -1,4 +1,4 @@
-import type { Driver, MobilityService, ProviderLocation, SessionUser, TeamMember, Transaction, Vehicle } from '../types'
+import type { Driver, DriverWorkspace, MobilityService, ProviderLocation, SessionUser, TeamMember, Transaction, Vehicle } from '../types'
 
 export interface FleetWorkspacePayload {
 	drivers: Driver[]
@@ -71,10 +71,16 @@ export const fleetApi = {
 			body: JSON.stringify(invitation),
 		}),
 	getWorkspace: () => request<FleetWorkspacePayload>('/workspace'),
+	getDriverWorkspace: () => request<DriverWorkspace>('/driver/workspace'),
 	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>) =>
 		request<Driver>('/drivers', {
 			method: 'POST',
 			body: JSON.stringify(driver),
+		}),
+	inviteDriver: (driverId: string, redirectUrl: string) =>
+		request<{ driverId: string; accountStatus: 'invited' }>(`/drivers/${driverId}/invitation`, {
+			method: 'POST',
+			body: JSON.stringify({ redirectUrl }),
 		}),
 	createVehicle: (vehicle: Omit<Vehicle, 'id' | 'monthlySpend'>) =>
 		request<Vehicle>('/vehicles', {

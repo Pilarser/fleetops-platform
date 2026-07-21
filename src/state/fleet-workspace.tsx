@@ -19,7 +19,7 @@ interface FleetWorkspaceState {
 	transactions: Transaction[]
 	vehicles: Vehicle[]
 	reloadWorkspace: () => Promise<void>
-	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>) => Promise<void>
+	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend' | 'accountStatus'>) => Promise<Driver>
 	createVehicle: (vehicle: Omit<Vehicle, 'id' | 'monthlySpend'>) => Promise<void>
 	createTransaction: (transaction: Omit<Transaction, 'id' | 'status'>) => Promise<Transaction>
 	updateDriver: (driver: Driver) => Promise<void>
@@ -33,6 +33,7 @@ interface FleetWorkspaceState {
 		},
 	) => Promise<Transaction>
 	toggleService: (serviceId: MobilityService['id']) => Promise<void>
+	inviteDriver: (driverId: string) => Promise<void>
 }
 
 const FleetWorkspaceContext = createContext<FleetWorkspaceState | undefined>(undefined)
@@ -137,9 +138,9 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 			reloadWorkspace,
 			createDriver: async (driver) => {
 				if (hasFleetApi()) {
-					await fleetApi.createDriver(driver)
+					const created = await fleetApi.createDriver(driver)
 					await refreshWorkspace()
-					return
+					return created
 				}
 
 				const createdDriver = {
@@ -150,6 +151,15 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				}
 				setDrivers((current) => applyDriverAssignment([...current, createdDriver], createdDriver))
 				setVehicles((current) => applyDriverToVehicles(current, createdDriver))
+				return createdDriver
+			},
+			inviteDriver: async (driverId) => {
+				if (!hasFleetApi()) {
+					throw new Error('Driver invitations require the hosted API')
+				}
+				const redirectUrl = new URL(import.meta.env.BASE_URL, window.location.origin).toString()
+				await fleetApi.inviteDriver(driverId, redirectUrl)
+				await refreshWorkspace()
 			},
 			createVehicle: async (vehicle) => {
 				if (hasFleetApi()) {

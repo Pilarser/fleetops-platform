@@ -2,6 +2,7 @@ import {
 	activateInvitation,
 	completeCompanyRegistration,
 	inviteCompanyMember,
+	inviteDriverAccount,
 	login,
 	requireRole,
 	requireSession,
@@ -13,6 +14,7 @@ import {
 	createTransaction,
 	createVehicle,
 	getWorkspace,
+	getDriverWorkspace,
 	getTeam,
 	toggleService,
 	updateDriver,
@@ -22,6 +24,7 @@ import {
 import { ApiError, corsHeaders, json, readJson } from './http.ts'
 import {
 	driverPayloadSchema,
+	driverInvitationSchema,
 	loginSchema,
 	serviceIdSchema,
 	teamInvitationSchema,
@@ -40,6 +43,13 @@ function routePath(request: Request) {
 	const functionName = '/fleet-api'
 	const index = pathname.indexOf(functionName)
 	return index >= 0 ? pathname.slice(index + functionName.length) || '/' : pathname
+}
+
+function validateInvitationRedirect(request: Request, redirectUrl: string) {
+	const origin = request.headers.get('origin')
+	if (!origin || new URL(redirectUrl).origin !== origin) {
+		throw new ApiError(400, 'Invalid invitation redirect URL')
+	}
 }
 
 Deno.serve(async (request) => {
@@ -83,11 +93,13 @@ Deno.serve(async (request) => {
 		if (request.method === 'POST' && path === '/team/invitations') {
 			requireRole(session, ['fleet_admin'])
 			const payload = teamInvitationSchema.parse(await readJson(request))
-			const origin = request.headers.get('origin')
-			if (!origin || new URL(payload.redirectUrl).origin !== origin) {
-				throw new ApiError(400, 'Invalid invitation redirect URL')
-			}
+			validateInvitationRedirect(request, payload.redirectUrl)
 			return json(await inviteCompanyMember(session, payload), 201)
+		}
+
+		if (request.method === 'GET' && path === '/driver/workspace') {
+			requireRole(session, ['driver'])
+			return json(await getDriverWorkspace(session.companyId, session.id))
 		}
 
 		if (request.method === 'GET' && path === '/workspace') {
@@ -99,6 +111,14 @@ Deno.serve(async (request) => {
 			requireRole(session, [...operationsRoles])
 			const payload = driverPayloadSchema.parse(await readJson(request))
 			return json(await createDriver(session.companyId, payload), 201)
+		}
+
+		if (request.method === 'POST' && path.startsWith('/drivers/') && path.endsWith('/invitation')) {
+			requireRole(session, ['fleet_admin', 'manager'])
+			const driverId = decodeURIComponent(path.slice('/drivers/'.length, -'/invitation'.length))
+			const payload = driverInvitationSchema.parse(await readJson(request))
+			validateInvitationRedirect(request, payload.redirectUrl)
+			return json(await inviteDriverAccount(session, driverId, payload.redirectUrl), 201)
 		}
 
 		if (request.method === 'PATCH' && path.startsWith('/drivers/')) {

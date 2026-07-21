@@ -266,6 +266,69 @@ export async function inviteCompanyMember(
 	}
 }
 
+export async function inviteDriverAccount(
+	session: AuthenticatedProfile,
+	driverId: string,
+	redirectUrl: string,
+) {
+	const [driver] = await sql<{ id: string; name: string; email: string; userId: string | null }[]>`
+		select id, name, email, "userId"
+		from "Driver"
+		where id = ${driverId} and "companyId" = ${session.companyId}
+		limit 1
+	`
+	if (!driver) {
+		throw new ApiError(404, 'Driver not found')
+	}
+	if (driver.userId) {
+		throw new ApiError(409, 'This driver already has a login account')
+	}
+
+	const email = driver.email.trim().toLowerCase()
+	const [existingProfile] = await sql`select id from "User" where lower(email) = ${email} limit 1`
+	if (existingProfile) {
+		throw new ApiError(409, 'A user profile already exists for this email')
+	}
+
+	const admin = adminClient()
+	const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+		data: {
+			company_id: session.companyId,
+			driver_id: driver.id,
+			invitation_pending: true,
+			name: driver.name,
+			role: 'driver',
+		},
+		redirectTo: redirectUrl,
+	})
+	if (error || !data.user) {
+		throw new ApiError(409, error?.message ?? 'Unable to invite this driver')
+	}
+
+	const profileId = `user-${crypto.randomUUID()}`
+	try {
+		await sql.begin(async (transaction) => {
+			await transaction`
+				insert into "User" (id, "authUserId", "companyId", name, email, password, role, status, "createdAt", "updatedAt")
+				values (${profileId}, ${data.user.id}, ${session.companyId}, ${driver.name}, ${email}, null, 'driver', 'invited', now(), now())
+			`
+			const [linkedDriver] = await transaction`
+				update "Driver"
+				set "userId" = ${profileId}, "updatedAt" = now()
+				where id = ${driver.id} and "companyId" = ${session.companyId} and "userId" is null
+				returning id
+			`
+			if (!linkedDriver) {
+				throw new ApiError(409, 'This driver already has a login account')
+			}
+		})
+		return { driverId: driver.id, accountStatus: 'invited' as const }
+	} catch (profileError) {
+		await admin.auth.admin.deleteUser(data.user.id).catch(() => undefined)
+		throw profileError
+	}
+}
+
 export async function activateInvitation(session: AuthenticatedProfile) {
 	const [member] = await sql`
 		update "User"

@@ -116,7 +116,7 @@ for (const user of demoUsers) {
 
 await prisma.driver.updateMany({
     where: { id: 'driver-1' },
-    data: { vehicleId: 'vehicle-1' },
+    data: { vehicleId: 'vehicle-1', userId: 'user-driver' },
 })
 
 await prisma.driver.updateMany({

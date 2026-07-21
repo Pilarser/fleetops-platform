@@ -35,6 +35,7 @@ model User {
   role      String
   status    String   @default("active")
   company   Company  @relation(fields: [companyId], references: [id])
+  driver    Driver?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -42,6 +43,7 @@ model User {
 model Driver {
   id            String   @id
   companyId     String
+  userId        String?  @unique
   vehicleId     String?
   name          String
   email         String
@@ -50,6 +52,7 @@ model Driver {
   monthlySpend  Float
   personalSpend Float
   company       Company  @relation(fields: [companyId], references: [id])
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

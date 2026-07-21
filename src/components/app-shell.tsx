@@ -27,9 +27,11 @@ const navItems = [
 
 export function AppShell({ children }: { children: ReactNode }) {
 	const { logout, user } = useAuth()
-	const visibleNavItems = user?.role === 'fleet_admin' && hasSupabaseAuth()
-		? [...navItems, { to: '/team', label: 'Team', icon: UsersRound }]
-		: navItems
+	const visibleNavItems = user?.role === 'driver'
+		? navItems.slice(0, 1)
+		: user?.role === 'fleet_admin' && hasSupabaseAuth()
+			? [...navItems, { to: '/team', label: 'Team', icon: UsersRound }]
+			: navItems
 
 	return (
 		<div className="app-shell">

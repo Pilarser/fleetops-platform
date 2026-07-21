@@ -13,6 +13,7 @@ import { VehiclesPage } from './pages/vehicles'
 import { LoginPage } from './pages/login'
 import { SetPasswordPage } from './pages/set-password'
 import { TeamPage } from './pages/team'
+import { DriverPortalPage } from './pages/driver-portal'
 import { AuthProvider, useAuth } from './state/auth'
 import { FleetWorkspaceProvider, useFleetWorkspace } from './state/fleet-workspace'
 import { Button } from './components/ui'
@@ -26,7 +27,7 @@ export default function App() {
 }
 
 function AuthenticatedApp() {
-	const { isAuthenticated, isInitializing, mustSetPassword } = useAuth()
+	const { isAuthenticated, isInitializing, mustSetPassword, user } = useAuth()
 
 	if (isInitializing) {
 		return (
@@ -47,6 +48,10 @@ function AuthenticatedApp() {
 
 	if (mustSetPassword) {
 		return <SetPasswordPage />
+	}
+
+	if (user?.role === 'driver') {
+		return <AppShell><DriverPortalPage /></AppShell>
 	}
 
 	return (

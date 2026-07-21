@@ -47,6 +47,13 @@ export interface Driver {
 	costCenter: string
 	monthlySpend: number
 	personalSpend: number
+	accountStatus?: 'not_invited' | 'invited' | 'active'
+}
+
+export interface DriverWorkspace {
+	driver: Driver
+	vehicle: Vehicle | null
+	transactions: Transaction[]
 }
 
 export interface MobilityService {

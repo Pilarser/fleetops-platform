@@ -176,6 +176,19 @@ export function createPrismaFleetStore(): FleetStore {
 				vehicles: vehicles.map((vehicle) => mapVehicle(vehicle, drivers)),
 			}
 		},
+		getDriverWorkspace: async (userId) => {
+			const driver = await prisma.driver.findFirst({ where: { companyId, userId } })
+			if (!driver) return undefined
+			const [vehicle, transactions] = await Promise.all([
+				driver.vehicleId ? prisma.vehicle.findFirst({ where: { companyId, id: driver.vehicleId } }) : null,
+				prisma.fleetTransaction.findMany({ orderBy: { date: 'desc' }, where: { companyId, driverId: driver.id } }),
+			])
+			return {
+				driver: mapDriver(driver),
+				vehicle: vehicle ? mapVehicle(vehicle, [driver]) : null,
+				transactions: transactions.map(mapTransaction),
+			}
+		},
 		createDriver: async (driver) => {
 			await ensureCompany()
 			const createdDriver = await prisma.$transaction(async (tx) => {

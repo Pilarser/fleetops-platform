@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { providers, transactions } from '../src/data/mock-data'
 import { drivers as seedDrivers, services as seedServices, vehicles as seedVehicles } from '../src/data/mock-data'
-import type { Driver, MobilityService, ProviderLocation, Transaction, Vehicle } from '../src/types'
+import type { Driver, DriverWorkspace, MobilityService, ProviderLocation, Transaction, Vehicle } from '../src/types'
 
 export interface FleetDatabase {
 	drivers: Driver[]
@@ -15,6 +15,7 @@ export interface FleetDatabase {
 export interface FleetStore {
 	path: string
 	getWorkspace: () => Promise<FleetDatabase>
+	getDriverWorkspace: (userId: string) => Promise<DriverWorkspace | undefined>
 	createDriver: (driver: Driver) => Promise<Driver>
 	createTransaction: (transaction: Transaction) => Promise<Transaction>
 	createVehicle: (vehicle: Vehicle) => Promise<Vehicle>
@@ -96,6 +97,15 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 	return {
 		path,
 		getWorkspace: async () => database,
+		getDriverWorkspace: async (userId: string) => {
+			const driver = database.drivers.find((item) => item.id === (userId === 'user-driver' ? 'driver-1' : userId))
+			if (!driver) return undefined
+			return {
+				driver,
+				vehicle: database.vehicles.find((vehicle) => vehicle.id === driver.vehicleId) ?? null,
+				transactions: database.transactions.filter((transaction) => transaction.driverId === driver.id),
+			}
+		},
 		createDriver: async (driver: Driver) => {
 			database = {
 				...database,

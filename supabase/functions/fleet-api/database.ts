@@ -15,6 +15,7 @@ type DbDriver = {
 	costCenter: string
 	monthlySpend: number
 	personalSpend: number
+	accountStatus?: string
 }
 
 type DbVehicle = {
@@ -97,6 +98,10 @@ export function mapDriver(driver: DbDriver) {
 		costCenter: driver.costCenter,
 		monthlySpend: Number(driver.monthlySpend),
 		personalSpend: Number(driver.personalSpend),
+		accountStatus:
+			driver.accountStatus === 'active' || driver.accountStatus === 'invited'
+				? driver.accountStatus
+				: 'not_invited',
 	}
 }
 
@@ -127,9 +132,14 @@ function mapTransaction(transaction: DbTransaction) {
 
 export async function getWorkspace(companyId: string) {
 	const [drivers, providers, services, transactions, vehicles] = await Promise.all([
-		sql<
-			DbDriver[]
-		>`select id, name, email, status, "vehicleId", "costCenter", "monthlySpend", "personalSpend" from "Driver" where "companyId" = ${companyId} order by name asc`,
+		sql<DbDriver[]>`
+			select d.id, d.name, d.email, d.status, d."vehicleId", d."costCenter", d."monthlySpend", d."personalSpend",
+				case when u.id is null then 'not_invited' else u.status end as "accountStatus"
+			from "Driver" d
+			left join "User" u on u.id = d."userId"
+			where d."companyId" = ${companyId}
+			order by d.name asc
+		`,
 		sql`select id, name, service, address, city, "distanceKm", status from "ProviderLocation" where "companyId" = ${companyId} order by name asc`,
 		sql`select type as id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} order by name asc`,
 		sql<DbTransaction[]>`select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
@@ -144,6 +154,38 @@ export async function getWorkspace(companyId: string) {
 		services: services.map((service) => ({ ...service, monthlyLimit: Number(service.monthlyLimit) })),
 		transactions: transactions.map(mapTransaction),
 		vehicles: vehicles.map((vehicle) => mapVehicle(vehicle, drivers)),
+	}
+}
+
+export async function getDriverWorkspace(companyId: string, userId: string) {
+	const [driver] = await sql<DbDriver[]>`
+		select d.id, d.name, d.email, d.status, d."vehicleId", d."costCenter", d."monthlySpend", d."personalSpend",
+			u.status as "accountStatus"
+		from "Driver" d
+		join "User" u on u.id = d."userId"
+		where d."companyId" = ${companyId} and d."userId" = ${userId}
+		limit 1
+	`
+	if (!driver) {
+		throw new ApiError(404, 'Driver profile not found')
+	}
+
+	const [vehicles, transactions] = await Promise.all([
+		driver.vehicleId
+			? sql<DbVehicle[]>`select id, plate, make, model, "fuelType", status, "costCenter", "monthlySpend", "mileageKm" from "Vehicle" where id = ${driver.vehicleId} and "companyId" = ${companyId}`
+			: Promise.resolve([] as DbVehicle[]),
+		sql<DbTransaction[]>`
+			select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
+			from "FleetTransaction"
+			where "companyId" = ${companyId} and "driverId" = ${driver.id}
+			order by date desc
+		`,
+	])
+
+	return {
+		driver: mapDriver(driver),
+		vehicle: vehicles[0] ? mapVehicle(vehicles[0], [driver]) : null,
+		transactions: transactions.map(mapTransaction),
 	}
 }
 
@@ -200,6 +242,15 @@ export async function createDriver(companyId: string, payload: DriverPayload) {
 
 export async function updateDriver(companyId: string, driverId: string, payload: DriverPayload) {
 	return sql.begin(async (transaction) => {
+		const [currentDriver] = await transaction<{ email: string; userId: string | null }[]>`
+			select email, "userId" from "Driver" where id = ${driverId} and "companyId" = ${companyId}
+		`
+		if (!currentDriver) {
+			throw new ApiError(404, 'Driver not found')
+		}
+		if (currentDriver.userId && currentDriver.email.toLowerCase() !== payload.email.toLowerCase()) {
+			throw new ApiError(409, 'Driver email cannot be changed after account invitation')
+		}
 		await ensureVehicleBelongsToCompany(transaction, payload.vehicleId, companyId)
 		if (payload.vehicleId) {
 			await transaction`update "Driver" set "vehicleId" = null, "updatedAt" = now() where "companyId" = ${companyId} and id <> ${driverId} and "vehicleId" = ${payload.vehicleId}`
@@ -214,6 +265,12 @@ export async function updateDriver(companyId: string, driverId: string, payload:
 		`
 		if (!driver) {
 			throw new ApiError(404, 'Driver not found')
+		}
+		if (currentDriver.userId) {
+			await transaction`
+				update "User" set name = ${payload.name}, "updatedAt" = now()
+				where id = ${currentDriver.userId} and "companyId" = ${companyId}
+			`
 		}
 		return mapDriver(driver)
 	})

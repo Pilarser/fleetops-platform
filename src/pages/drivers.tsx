@@ -1,13 +1,15 @@
 import { FormEvent, useMemo, useState } from 'react'
-import { LoaderCircle, Plus } from 'lucide-react'
+import { LoaderCircle, Mail, Plus } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput, Toolbar } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
 import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useAuth } from '../state/auth'
+import { hasSupabaseAuth } from '../services/supabase-auth'
 import type { Driver } from '../types'
 import { getVehiclePlate, statusTone } from './helpers'
 
-type DriverFormState = Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>
+type DriverFormState = Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend' | 'accountStatus'>
 
 const emptyDriverForm: DriverFormState = {
 	name: '',
@@ -18,11 +20,27 @@ const emptyDriverForm: DriverFormState = {
 }
 
 export function DriversPage() {
-	const { createDriver, drivers, updateDriver, vehicles } = useFleetWorkspace()
+	const { user } = useAuth()
+	const { createDriver, drivers, inviteDriver, updateDriver, vehicles } = useFleetWorkspace()
+	const supportsInvitations = hasSupabaseAuth() && (user?.role === 'fleet_admin' || user?.role === 'manager')
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [query, setQuery] = useState('')
 	const [isCreating, setIsCreating] = useState(searchParams.get('create') === '1')
 	const [editingDriver, setEditingDriver] = useState<Driver | null>(null)
+	const [invitingDriverId, setInvitingDriverId] = useState<string | null>(null)
+	const [pageError, setPageError] = useState<string | null>(null)
+
+	async function handleInvitation(driverId: string) {
+		setPageError(null)
+		setInvitingDriverId(driverId)
+		try {
+			await inviteDriver(driverId)
+		} catch (error) {
+			setPageError(error instanceof Error ? error.message : 'Unable to invite the driver')
+		} finally {
+			setInvitingDriverId(null)
+		}
+	}
 
 	function closeCreateDialog() {
 		setIsCreating(false)
@@ -56,6 +74,7 @@ export function DriversPage() {
 					</Button>
 				}
 			/>
+			{pageError ? <p className="page-error" role="alert">{pageError}</p> : null}
 			<Card>
 				<Toolbar>
 					<TextInput
@@ -68,7 +87,10 @@ export function DriversPage() {
 				</Toolbar>
 				{filteredDrivers.length > 0 ? (
 					<Table
-						columns={['Driver', 'Email', 'Vehicle', 'Cost center', 'Monthly spend', 'Personal', 'Status', '']}
+						columns={[
+							'Driver', 'Email', 'Vehicle', 'Cost center', 'Monthly spend', 'Personal', 'Status',
+							...(supportsInvitations ? ['Account'] : []), '',
+						]}
 						rows={filteredDrivers}
 						renderRow={(driver) => (
 							<tr key={driver.id}>
@@ -83,10 +105,23 @@ export function DriversPage() {
 								<td>
 									<Badge tone={statusTone(driver.status)}>{driver.status}</Badge>
 								</td>
+								{supportsInvitations ? (
+									<td>
+										<Badge tone={driver.accountStatus === 'active' ? 'green' : driver.accountStatus === 'invited' ? 'amber' : 'gray'}>
+											{driver.accountStatus === 'active' ? 'active' : driver.accountStatus === 'invited' ? 'invited' : 'not invited'}
+										</Badge>
+									</td>
+								) : null}
 								<td>
-									<Button type="button" variant="ghost" onClick={() => setEditingDriver(driver)}>
-										Edit
-									</Button>
+									<div className="row-actions">
+										{supportsInvitations && (!driver.accountStatus || driver.accountStatus === 'not_invited') ? (
+											<Button type="button" variant="ghost" disabled={invitingDriverId === driver.id} onClick={() => void handleInvitation(driver.id)}>
+												{invitingDriverId === driver.id ? <LoaderCircle className="spinner" size={15} /> : <Mail size={15} />}
+												{invitingDriverId === driver.id ? 'Sending...' : 'Invite'}
+											</Button>
+										) : null}
+										<Button type="button" variant="ghost" onClick={() => setEditingDriver(driver)}>Edit</Button>
+									</div>
 								</td>
 							</tr>
 						)}
@@ -105,8 +140,12 @@ export function DriversPage() {
 					title="Add driver"
 					vehicles={vehicles}
 					onClose={closeCreateDialog}
-					onSubmit={async (driver) => {
-						await createDriver(driver)
+					allowInvitation={supportsInvitations}
+					onSubmit={async (driver, sendInvitation) => {
+						const created = await createDriver(driver)
+						if (sendInvitation) {
+							await handleInvitation(created.id)
+						}
 						closeCreateDialog()
 					}}
 				/>
@@ -132,15 +171,17 @@ export function DriversPage() {
 }
 
 function DriverDialog({
+	allowInvitation = false,
 	driver,
 	onClose,
 	onSubmit,
 	title,
 	vehicles,
 }: {
+	allowInvitation?: boolean
 	driver?: Driver
 	onClose: () => void
-	onSubmit: (driver: DriverFormState) => Promise<void>
+	onSubmit: (driver: DriverFormState, sendInvitation: boolean) => Promise<void>
 	title: string
 	vehicles: ReturnType<typeof useFleetWorkspace>['vehicles']
 }) {
@@ -150,6 +191,7 @@ function DriverDialog({
 	})
 	const [isSaving, setIsSaving] = useState(false)
 	const [saveError, setSaveError] = useState<string | null>(null)
+	const [sendInvitation, setSendInvitation] = useState(allowInvitation && !driver)
 
 	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
@@ -161,7 +203,7 @@ function DriverDialog({
 				name: form.name.trim(),
 				email: form.email.trim().toLowerCase(),
 				costCenter: form.costCenter.trim(),
-			})
+			}, sendInvitation)
 		} catch (error) {
 			setSaveError(error instanceof Error ? error.message : 'Unable to save the driver')
 			setIsSaving(false)
@@ -176,6 +218,7 @@ function DriverDialog({
 				</Field>
 				<Field label="Email">
 					<TextInput
+						disabled={Boolean(driver?.accountStatus && driver.accountStatus !== 'not_invited')}
 						required
 						type="email"
 						value={form.email}
@@ -201,6 +244,12 @@ function DriverDialog({
 				<Field label="Cost center">
 					<TextInput required value={form.costCenter} onChange={(event) => setForm({ ...form, costCenter: event.target.value })} />
 				</Field>
+				{allowInvitation && !driver ? (
+					<label className="checkbox-field form-span">
+						<input type="checkbox" checked={sendInvitation} onChange={(event) => setSendInvitation(event.target.checked)} />
+						<span>Send an email invitation after creating this driver</span>
+					</label>
+				) : null}
 				<div className="form-actions">
 					{saveError ? <p className="form-error">{saveError}</p> : null}
 					<Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>

@@ -344,6 +344,17 @@ a {
 	font-weight: 700;
 }
 
+.page-error {
+	margin: -10px 0 16px;
+	padding: 10px 12px;
+	border: 1px solid #f3c7c2;
+	border-radius: 8px;
+	background: #fff4f2;
+	color: #9f2d24;
+	font-size: 13px;
+	font-weight: 700;
+}
+
 .demo-credentials {
 	display: grid;
 	gap: 6px;
@@ -404,6 +415,10 @@ a {
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 14px;
 	margin-bottom: 18px;
+}
+
+.driver-metrics {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .setup-panel {
@@ -809,6 +824,18 @@ textarea.field {
 	justify-content: flex-end;
 	gap: 10px;
 	padding-top: 4px;
+}
+
+.form-span {
+	grid-column: 1 / -1;
+}
+
+.row-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 4px;
+	white-space: nowrap;
 }
 
 .form-actions .form-error {

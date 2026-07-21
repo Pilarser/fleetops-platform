@@ -366,4 +366,16 @@ describe('fleet API', () => {
 
 		assert.equal(response.status, 403)
 	})
+
+	it('limits driver sessions to their linked driver workspace', async () => {
+		const token = await login('driver@example.com')
+		const response = await fetch(`${baseUrl}/api/driver/workspace`, {
+			headers: { authorization: `Bearer ${token}` },
+		})
+		const workspace = (await response.json()) as { driver: { id: string }; transactions: Array<{ driverId: string }> }
+
+		assert.equal(response.status, 200)
+		assert.equal(workspace.driver.id, 'driver-1')
+		assert.ok(workspace.transactions.every((transaction) => transaction.driverId === 'driver-1'))
+	})
 })

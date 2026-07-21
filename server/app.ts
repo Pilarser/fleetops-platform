@@ -62,6 +62,18 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 				return
 			}
 
+			if (method === 'GET' && url.pathname === '/api/driver/workspace') {
+				const driverUser = requireRole(request, response, ['driver'])
+				if (!driverUser) return
+				const workspace = await store.getDriverWorkspace(driverUser.id)
+				if (!workspace) {
+					sendJson(response, 404, { message: 'Driver profile not found' })
+					return
+				}
+				sendJson(response, 200, workspace)
+				return
+			}
+
 			if (method === 'GET' && url.pathname === '/api/workspace') {
 				if (!requireRole(request, response, [...workspaceRoles])) {
 					return
