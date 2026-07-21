@@ -1,12 +1,13 @@
 import { FormEvent, useMemo, useState } from 'react'
-import { LoaderCircle, Mail, Plus } from 'lucide-react'
+import { LoaderCircle, Mail, Plus, RotateCw, UserCheck, UserX, XCircle } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput, Toolbar } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
 import { useFleetWorkspace } from '../state/fleet-workspace'
 import { useAuth } from '../state/auth'
 import { hasSupabaseAuth } from '../services/supabase-auth'
-import type { Driver } from '../types'
+import { fleetApi } from '../services/fleet-api'
+import type { AccountLifecycleAction, Driver } from '../types'
 import { getVehiclePlate, statusTone } from './helpers'
 
 type DriverFormState = Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend' | 'accountStatus'>
@@ -21,7 +22,7 @@ const emptyDriverForm: DriverFormState = {
 
 export function DriversPage() {
 	const { user } = useAuth()
-	const { createDriver, drivers, inviteDriver, updateDriver, vehicles } = useFleetWorkspace()
+	const { createDriver, drivers, inviteDriver, reloadWorkspace, updateDriver, vehicles } = useFleetWorkspace()
 	const supportsInvitations = hasSupabaseAuth() && (user?.role === 'fleet_admin' || user?.role === 'manager')
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [query, setQuery] = useState('')
@@ -37,6 +38,26 @@ export function DriversPage() {
 			await inviteDriver(driverId)
 		} catch (error) {
 			setPageError(error instanceof Error ? error.message : 'Unable to invite the driver')
+		} finally {
+			setInvitingDriverId(null)
+		}
+	}
+
+	async function handleAccountLifecycle(driver: Driver, action: AccountLifecycleAction) {
+		if (!driver.accountUserId) return
+		if ((action === 'revoke_invitation' || action === 'disable') && !window.confirm(
+			action === 'disable' ? `Disable ${driver.name}'s account?` : `Revoke ${driver.name}'s invitation?`,
+		)) return
+		setPageError(null)
+		setInvitingDriverId(driver.id)
+		try {
+			const redirectUrl = action === 'resend_invitation'
+				? new URL(import.meta.env.BASE_URL, window.location.origin).toString()
+				: undefined
+			await fleetApi.manageAccount(driver.accountUserId, action, redirectUrl)
+			await reloadWorkspace()
+		} catch (error) {
+			setPageError(error instanceof Error ? error.message : 'Unable to update the driver account')
 		} finally {
 			setInvitingDriverId(null)
 		}
@@ -107,8 +128,8 @@ export function DriversPage() {
 								</td>
 								{supportsInvitations ? (
 									<td>
-										<Badge tone={driver.accountStatus === 'active' ? 'green' : driver.accountStatus === 'invited' ? 'amber' : 'gray'}>
-											{driver.accountStatus === 'active' ? 'active' : driver.accountStatus === 'invited' ? 'invited' : 'not invited'}
+										<Badge tone={driver.accountStatus === 'active' ? 'green' : driver.accountStatus === 'invited' ? 'amber' : driver.accountStatus === 'disabled' ? 'red' : 'gray'}>
+											{driver.accountStatus === 'active' ? 'active' : driver.accountStatus === 'invited' ? 'invited' : driver.accountStatus === 'disabled' ? 'disabled' : 'not invited'}
 										</Badge>
 									</td>
 								) : null}
@@ -119,6 +140,20 @@ export function DriversPage() {
 												{invitingDriverId === driver.id ? <LoaderCircle className="spinner" size={15} /> : <Mail size={15} />}
 												{invitingDriverId === driver.id ? 'Sending...' : 'Invite'}
 											</Button>
+										) : null}
+										{supportsInvitations && driver.accountStatus === 'invited' ? (
+											<>
+												<Button type="button" variant="ghost" disabled={invitingDriverId === driver.id} onClick={() => void handleAccountLifecycle(driver, 'resend_invitation')}>
+													{invitingDriverId === driver.id ? <LoaderCircle className="spinner" size={15} /> : <RotateCw size={15} />} Resend
+												</Button>
+												<Button type="button" variant="ghost" disabled={invitingDriverId === driver.id} onClick={() => void handleAccountLifecycle(driver, 'revoke_invitation')}><XCircle size={15} /> Revoke</Button>
+											</>
+										) : null}
+										{supportsInvitations && driver.accountStatus === 'active' ? (
+											<Button type="button" variant="ghost" disabled={invitingDriverId === driver.id} onClick={() => void handleAccountLifecycle(driver, 'disable')}><UserX size={15} /> Disable</Button>
+										) : null}
+										{supportsInvitations && driver.accountStatus === 'disabled' ? (
+											<Button type="button" variant="ghost" disabled={invitingDriverId === driver.id} onClick={() => void handleAccountLifecycle(driver, 'reactivate')}><UserCheck size={15} /> Reactivate</Button>
 										) : null}
 										<Button type="button" variant="ghost" onClick={() => setEditingDriver(driver)}>Edit</Button>
 									</div>

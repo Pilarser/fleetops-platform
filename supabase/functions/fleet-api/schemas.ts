@@ -22,6 +22,11 @@ export const driverInvitationSchema = z.object({
 	redirectUrl: z.string().url(),
 })
 
+export const accountLifecycleSchema = z.object({
+	action: z.enum(['resend_invitation', 'revoke_invitation', 'disable', 'reactivate']),
+	redirectUrl: z.string().url().optional(),
+})
+
 export const driverPayloadSchema = z.object({
 	name: z.string().min(1),
 	email: z.string().email(),

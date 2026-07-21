@@ -73,6 +73,7 @@ export function LoginPage() {
 					<Button type="submit" disabled={isAuthenticating}>
 						{isAuthenticating ? 'Signing in...' : 'Sign in'}
 					</Button>
+					<Link className="auth-link" to="/forgot-password">Forgot password?</Link>
 				</form>
 				<p className="auth-switch">
 					New company? <Link to="/register">Create an account</Link>

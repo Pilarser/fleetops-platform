@@ -1,7 +1,9 @@
-import { type FormEvent, useEffect, useState } from 'react'
-import { LoaderCircle, UserPlus } from 'lucide-react'
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import { LoaderCircle, RotateCw, UserCheck, UserPlus, UserX, XCircle } from 'lucide-react'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput } from '../components/ui'
 import { fleetApi } from '../services/fleet-api'
+import { useAuth } from '../state/auth'
+import type { AccountLifecycleAction } from '../types'
 import type { TeamMember } from '../types'
 
 type InvitationForm = {
@@ -17,6 +19,7 @@ function invitationRedirectUrl() {
 }
 
 export function TeamPage() {
+	const { user } = useAuth()
 	const [members, setMembers] = useState<TeamMember[]>([])
 	const [isLoading, setIsLoading] = useState(true)
 	const [loadError, setLoadError] = useState('')
@@ -24,13 +27,39 @@ export function TeamPage() {
 	const [isDialogOpen, setIsDialogOpen] = useState(false)
 	const [form, setForm] = useState<InvitationForm>(emptyInvitation)
 	const [inviteError, setInviteError] = useState('')
+	const [actionError, setActionError] = useState('')
+	const [pendingAction, setPendingAction] = useState<string | null>(null)
+
+	async function loadMembers() {
+		setLoadError('')
+		try {
+			setMembers(await fleetApi.getTeam())
+		} catch (error) {
+			setLoadError(error instanceof Error ? error.message : 'Unable to load team members')
+		} finally {
+			setIsLoading(false)
+		}
+	}
 
 	useEffect(() => {
-		fleetApi.getTeam()
-			.then(setMembers)
-			.catch((error) => setLoadError(error instanceof Error ? error.message : 'Unable to load team members'))
-			.finally(() => setIsLoading(false))
+		void loadMembers()
 	}, [])
+
+	async function handleLifecycle(member: TeamMember, action: AccountLifecycleAction) {
+		if ((action === 'revoke_invitation' || action === 'disable') && !window.confirm(
+			action === 'disable' ? `Disable ${member.name}'s access?` : `Revoke ${member.name}'s invitation?`,
+		)) return
+		setActionError('')
+		setPendingAction(`${member.id}:${action}`)
+		try {
+			await fleetApi.manageAccount(member.id, action, action === 'resend_invitation' ? invitationRedirectUrl() : undefined)
+			await loadMembers()
+		} catch (error) {
+			setActionError(error instanceof Error ? error.message : 'Unable to update the account')
+		} finally {
+			setPendingAction(null)
+		}
+	}
 
 	function openInviteDialog() {
 		setForm(emptyInvitation)
@@ -65,6 +94,7 @@ export function TeamPage() {
 				description="Company members and workspace roles."
 				actions={<Button type="button" onClick={openInviteDialog}><UserPlus size={16} /> Invite member</Button>}
 			/>
+			{actionError ? <p className="page-error" role="alert">{actionError}</p> : null}
 			<Card>
 				{isLoading ? (
 					<div className="empty-state" role="status"><LoaderCircle className="spinner" size={22} /><span>Loading team</span></div>
@@ -72,14 +102,15 @@ export function TeamPage() {
 					<EmptyState title="Unable to load team" detail={loadError} />
 				) : (
 					<Table
-						columns={['Member', 'Email', 'Role', 'Status']}
+						columns={['Member', 'Email', 'Role', 'Status', 'Actions']}
 						rows={members}
 						renderRow={(member) => (
 							<tr key={member.id}>
 								<td><strong>{member.name}</strong></td>
 								<td>{member.email}</td>
 								<td>{member.role.replace('_', ' ')}</td>
-								<td><Badge tone={member.status === 'active' ? 'green' : 'amber'}>{member.status}</Badge></td>
+								<td><Badge tone={member.status === 'active' ? 'green' : member.status === 'disabled' ? 'red' : 'amber'}>{member.status}</Badge></td>
+								<td><AccountActions member={member} currentUserId={user?.id} pendingAction={pendingAction} onAction={handleLifecycle} /></td>
 							</tr>
 						)}
 					/>
@@ -114,5 +145,26 @@ export function TeamPage() {
 				</Dialog>
 			) : null}
 		</>
+	)
+}
+
+function AccountActions({ member, currentUserId, onAction, pendingAction }: {
+	member: TeamMember
+	currentUserId?: string
+	onAction: (member: TeamMember, action: AccountLifecycleAction) => Promise<void>
+	pendingAction: string | null
+}) {
+	const actionButton = (action: AccountLifecycleAction, label: string, icon: ReactNode) => (
+		<Button key={action} type="button" variant="ghost" disabled={Boolean(pendingAction)} onClick={() => void onAction(member, action)}>
+			{pendingAction === `${member.id}:${action}` ? <LoaderCircle className="spinner" size={15} /> : icon}{label}
+		</Button>
+	)
+	return (
+		<div className="row-actions">
+			{member.status === 'invited' ? actionButton('resend_invitation', 'Resend', <RotateCw size={15} />) : null}
+			{member.status === 'invited' ? actionButton('revoke_invitation', 'Revoke', <XCircle size={15} />) : null}
+			{member.status === 'active' && member.id !== currentUserId ? actionButton('disable', 'Disable', <UserX size={15} />) : null}
+			{member.status === 'disabled' ? actionButton('reactivate', 'Reactivate', <UserCheck size={15} />) : null}
+		</div>
 	)
 }

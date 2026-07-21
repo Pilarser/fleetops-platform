@@ -16,6 +16,7 @@ type DbDriver = {
 	monthlySpend: number
 	personalSpend: number
 	accountStatus?: string
+	accountUserId?: string | null
 }
 
 type DbVehicle = {
@@ -99,9 +100,10 @@ export function mapDriver(driver: DbDriver) {
 		monthlySpend: Number(driver.monthlySpend),
 		personalSpend: Number(driver.personalSpend),
 		accountStatus:
-			driver.accountStatus === 'active' || driver.accountStatus === 'invited'
+			driver.accountStatus === 'active' || driver.accountStatus === 'invited' || driver.accountStatus === 'disabled'
 				? driver.accountStatus
 				: 'not_invited',
+		accountUserId: driver.accountUserId ?? undefined,
 	}
 }
 
@@ -134,7 +136,7 @@ export async function getWorkspace(companyId: string) {
 	const [drivers, providers, services, transactions, vehicles] = await Promise.all([
 		sql<DbDriver[]>`
 			select d.id, d.name, d.email, d.status, d."vehicleId", d."costCenter", d."monthlySpend", d."personalSpend",
-				case when u.id is null then 'not_invited' else u.status end as "accountStatus"
+				case when u.id is null then 'not_invited' else u.status end as "accountStatus", u.id as "accountUserId"
 			from "Driver" d
 			left join "User" u on u.id = d."userId"
 			where d."companyId" = ${companyId}
@@ -160,7 +162,7 @@ export async function getWorkspace(companyId: string) {
 export async function getDriverWorkspace(companyId: string, userId: string) {
 	const [driver] = await sql<DbDriver[]>`
 		select d.id, d.name, d.email, d.status, d."vehicleId", d."costCenter", d."monthlySpend", d."personalSpend",
-			u.status as "accountStatus"
+			u.status as "accountStatus", u.id as "accountUserId"
 		from "Driver" d
 		join "User" u on u.id = d."userId"
 		where d."companyId" = ${companyId} and d."userId" = ${userId}
@@ -198,7 +200,7 @@ export async function getTeam(companyId: string) {
 	`
 	return members.map((member) => ({
 		...member,
-		status: member.status === 'invited' ? 'invited' : 'active',
+		status: member.status === 'invited' || member.status === 'disabled' ? member.status : 'active',
 	}))
 }
 

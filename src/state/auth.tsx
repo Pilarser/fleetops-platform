@@ -12,11 +12,14 @@ interface AuthState {
 	isAuthenticating: boolean
 	isInitializing: boolean
 	isRegistering: boolean
+	mustResetPassword: boolean
 	mustSetPassword: boolean
 	user: SessionUser | null
 	login: (credentials: { email: string; password: string }) => Promise<void>
 	registerCompany: (registration: CompanyRegistration) => Promise<{ requiresEmailVerification: boolean }>
 	resendVerification: (email: string) => Promise<void>
+	requestPasswordReset: (email: string) => Promise<void>
+	completePasswordReset: (password: string) => Promise<void>
 	completeInvitation: (password: string) => Promise<void>
 	logout: () => void
 }
@@ -74,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
 	const [isInitializing, setIsInitializing] = useState(usesHostedAuth)
 	const [isRegistering, setIsRegistering] = useState(false)
+	const [mustResetPassword, setMustResetPassword] = useState(false)
 	const [mustSetPassword, setMustSetPassword] = useState(false)
 
 	useEffect(() => {
@@ -94,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				clearStoredUser()
 				setUser(null)
 				setMustSetPassword(false)
+				setMustResetPassword(false)
 				setIsInitializing(false)
 				return
 			}
@@ -123,8 +128,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		}
 
 		void synchronizeSession()
-		const { data } = auth.auth.onAuthStateChange((_event, session) => {
+		const { data } = auth.auth.onAuthStateChange((event, session) => {
 			fleetApi.setToken(session?.access_token ?? null)
+			if (event === 'PASSWORD_RECOVERY') {
+				setMustResetPassword(true)
+			}
 			if (session) {
 				localStorage.removeItem(tokenStorageKey)
 				void loadHostedUser()
@@ -148,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				clearStoredUser()
 				setUser(null)
 				setMustSetPassword(false)
+				setMustResetPassword(false)
 			}
 		})
 
@@ -163,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			isAuthenticating,
 			isInitializing,
 			isRegistering,
+			mustResetPassword,
 			mustSetPassword,
 			user,
 			login: async ({ email, password }) => {
@@ -267,6 +277,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					throw error
 				}
 			},
+			requestPasswordReset: async (email) => {
+				if (!supabaseAuth) {
+					throw new Error('Supabase authentication is not configured')
+				}
+				const { error } = await supabaseAuth.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+					redirectTo: authRedirectUrl(),
+				})
+				if (error) throw error
+			},
+			completePasswordReset: async (password) => {
+				if (!supabaseAuth) {
+					throw new Error('Supabase authentication is not configured')
+				}
+				const { error } = await supabaseAuth.auth.updateUser({ password })
+				if (error) throw error
+				if (user?.membershipStatus === 'invited') {
+					const sessionUser = await fleetApi.acceptInvitation()
+					storeUser(sessionUser)
+					setUser(sessionUser)
+					setMustSetPassword(false)
+				}
+				setMustResetPassword(false)
+			},
 			completeInvitation: async (password) => {
 				if (!supabaseAuth) {
 					throw new Error('Supabase authentication is not configured')
@@ -282,18 +315,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				storeUser(sessionUser)
 				setUser(sessionUser)
 				setMustSetPassword(false)
+				setMustResetPassword(false)
 			},
 			logout: () => {
 				fleetApi.setToken(null)
 				clearStoredUser()
 				setUser(null)
 				setMustSetPassword(false)
+				setMustResetPassword(false)
 				if (supabaseAuth) {
 					void supabaseAuth.auth.signOut()
 				}
 			},
 		}),
-		[isAuthenticating, isInitializing, isRegistering, mustSetPassword, user],
+		[isAuthenticating, isInitializing, isRegistering, mustResetPassword, mustSetPassword, user],
 	)
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

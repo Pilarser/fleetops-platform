@@ -218,6 +218,38 @@ a {
 	font-size: 28px;
 }
 
+.auth-link {
+	justify-self: end;
+	color: #1d5b50;
+	font-size: 13px;
+	font-weight: 750;
+}
+
+.auth-confirmation {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	margin-top: 20px;
+	padding: 14px;
+	border: 1px solid #b7dfd2;
+	border-radius: 8px;
+	background: #eaf7f2;
+	color: #24584e;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.auth-confirmation svg {
+	flex: 0 0 auto;
+	margin-top: 1px;
+}
+
+.auth-switch a {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
 .login-copy p {
 	margin: 8px 0 0;
 	color: #667085;

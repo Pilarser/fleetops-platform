@@ -4,6 +4,7 @@ import {
 	inviteCompanyMember,
 	inviteDriverAccount,
 	login,
+	manageAccountLifecycle,
 	requireRole,
 	requireSession,
 	sessionResponse,
@@ -23,6 +24,7 @@ import {
 } from './database.ts'
 import { ApiError, corsHeaders, json, readJson } from './http.ts'
 import {
+	accountLifecycleSchema,
 	driverPayloadSchema,
 	driverInvitationSchema,
 	loginSchema,
@@ -95,6 +97,17 @@ Deno.serve(async (request) => {
 			const payload = teamInvitationSchema.parse(await readJson(request))
 			validateInvitationRedirect(request, payload.redirectUrl)
 			return json(await inviteCompanyMember(session, payload), 201)
+		}
+
+		if (request.method === 'POST' && path.startsWith('/accounts/') && path.endsWith('/lifecycle')) {
+			requireRole(session, ['fleet_admin', 'manager'])
+			const accountId = decodeURIComponent(path.slice('/accounts/'.length, -'/lifecycle'.length))
+			const payload = accountLifecycleSchema.parse(await readJson(request))
+			if (payload.action === 'resend_invitation') {
+				if (!payload.redirectUrl) throw new ApiError(400, 'Invitation redirect URL is required')
+				validateInvitationRedirect(request, payload.redirectUrl)
+			}
+			return json(await manageAccountLifecycle(session, accountId, payload.action, payload.redirectUrl))
 		}
 
 		if (request.method === 'GET' && path === '/driver/workspace') {

@@ -12,13 +12,13 @@ export interface SessionUser {
 	email: string
 	role: UserRole
 	companyName: string
-	membershipStatus: 'active' | 'invited'
+	membershipStatus: 'active' | 'invited' | 'disabled'
 }
 
 export interface AuthenticatedProfile extends SessionUser {
 	authUserId: string
 	companyId: string
-	status: 'active' | 'invited'
+	status: 'active' | 'invited' | 'disabled'
 }
 
 type ProfileRecord = {
@@ -104,8 +104,8 @@ function mapProfile(record: ProfileRecord): AuthenticatedProfile {
 		name: record.name,
 		email: record.email,
 		role,
-		status: record.status === 'invited' ? 'invited' : 'active',
-		membershipStatus: record.status === 'invited' ? 'invited' : 'active',
+		status: record.status === 'invited' || record.status === 'disabled' ? record.status : 'active',
+		membershipStatus: record.status === 'invited' || record.status === 'disabled' ? record.status : 'active',
 		companyName: record.companyName,
 	}
 }
@@ -215,6 +215,9 @@ export async function login(emailValue: string, password: string) {
 		if (!profile) {
 			throw new ApiError(403, 'User profile is not configured')
 		}
+		if (profile.status === 'disabled') {
+			throw new ApiError(403, 'This account has been disabled. Contact your fleet administrator.')
+		}
 		return { profile, session: directLogin.data.session }
 	}
 
@@ -222,11 +225,135 @@ export async function login(emailValue: string, password: string) {
 	if (!legacyProfile) {
 		throw new ApiError(401, 'Invalid email or password')
 	}
+	if (legacyProfile.status === 'disabled') {
+		throw new ApiError(403, 'This account has been disabled. Contact your fleet administrator.')
+	}
 	const migrated = await migrateLegacyUser(legacyProfile, password)
 	if (!migrated.profile) {
 		throw new ApiError(403, 'User profile is not configured')
 	}
+	if (migrated.profile.status === 'disabled') {
+		throw new ApiError(403, 'This account has been disabled. Contact your fleet administrator.')
+	}
 	return { profile: migrated.profile, session: migrated.session }
+}
+
+type AccountLifecycleAction = 'resend_invitation' | 'revoke_invitation' | 'disable' | 'reactivate'
+
+type ManagedAccount = {
+	id: string
+	authUserId: string | null
+	companyId: string
+	name: string
+	email: string
+	role: UserRole
+	status: 'active' | 'invited' | 'disabled'
+	driverId: string | null
+}
+
+function invitationMetadata(account: ManagedAccount) {
+	return {
+		company_id: account.companyId,
+		...(account.driverId ? { driver_id: account.driverId } : {}),
+		invitation_pending: true,
+		name: account.name,
+		role: account.role,
+	}
+}
+
+export async function manageAccountLifecycle(
+	session: AuthenticatedProfile,
+	accountId: string,
+	action: AccountLifecycleAction,
+	redirectUrl?: string,
+) {
+	const [record] = await sql<ManagedAccount[]>`
+		select u.id, u."authUserId", u."companyId", u.name, u.email, u.role, u.status, d.id as "driverId"
+		from "User" u
+		left join "Driver" d on d."userId" = u.id
+		where u.id = ${accountId} and u."companyId" = ${session.companyId}
+		limit 1
+	`
+	if (!record) {
+		throw new ApiError(404, 'Account not found')
+	}
+
+	const role = parseUserRole(record.role)
+	if (!role) {
+		throw new ApiError(400, 'Account role is invalid')
+	}
+	const account: ManagedAccount = {
+		...record,
+		role,
+		status: record.status === 'invited' || record.status === 'disabled' ? record.status : 'active',
+	}
+	if (session.role === 'manager' && account.role !== 'driver') {
+		throw new ApiError(403, 'Managers can only manage driver accounts')
+	}
+	const admin = adminClient()
+
+	if (action === 'resend_invitation') {
+		if (account.status !== 'invited' || !redirectUrl) {
+			throw new ApiError(409, 'Only pending invitations can be resent')
+		}
+		if (account.authUserId) {
+			const { error } = await admin.auth.admin.deleteUser(account.authUserId)
+			if (error) throw error
+			await sql`update "User" set "authUserId" = null, "updatedAt" = now() where id = ${account.id}`
+		}
+		const { data, error } = await admin.auth.admin.inviteUserByEmail(account.email, {
+			data: invitationMetadata(account),
+			redirectTo: redirectUrl,
+		})
+		if (error || !data.user) {
+			throw new ApiError(409, error?.message ?? 'Unable to resend the invitation')
+		}
+		try {
+			await sql`update "User" set "authUserId" = ${data.user.id}, "updatedAt" = now() where id = ${account.id}`
+		} catch (profileError) {
+			await admin.auth.admin.deleteUser(data.user.id).catch(() => undefined)
+			throw profileError
+		}
+	}
+
+	if (action === 'revoke_invitation') {
+		if (account.status !== 'invited') {
+			throw new ApiError(409, 'Only pending invitations can be revoked')
+		}
+		if (account.authUserId) {
+			const { error } = await admin.auth.admin.deleteUser(account.authUserId)
+			if (error) throw error
+		}
+		await sql`delete from "User" where id = ${account.id} and "companyId" = ${session.companyId}`
+	}
+
+	if (action === 'disable') {
+		if (account.id === session.id) {
+			throw new ApiError(400, 'You cannot disable your own account')
+		}
+		if (account.status !== 'active' || !account.authUserId) {
+			throw new ApiError(409, 'Only active accounts can be disabled')
+		}
+		const { error } = await admin.auth.admin.updateUserById(account.authUserId, { ban_duration: '876000h' })
+		if (error) throw error
+		try {
+			await sql`update "User" set status = 'disabled', "updatedAt" = now() where id = ${account.id}`
+		} catch (profileError) {
+			await admin.auth.admin.updateUserById(account.authUserId, { ban_duration: 'none' }).catch(() => undefined)
+			throw profileError
+		}
+	}
+
+	if (action === 'reactivate') {
+		if (account.status !== 'disabled' || !account.authUserId) {
+			throw new ApiError(409, 'Only disabled accounts can be reactivated')
+		}
+		const { error } = await admin.auth.admin.updateUserById(account.authUserId, { ban_duration: 'none' })
+		if (error) throw error
+		await sql`update "User" set status = 'active', "updatedAt" = now() where id = ${account.id}`
+	}
+
+	return { id: account.id, action }
 }
 
 export async function inviteCompanyMember(
@@ -354,6 +481,9 @@ export async function requireSession(request: Request) {
 	const profile = await findProfileByAuthUserId(identity.id)
 	if (!profile) {
 		throw new ApiError(403, 'User profile is not configured')
+	}
+	if (profile.status === 'disabled') {
+		throw new ApiError(403, 'This account has been disabled. Contact your fleet administrator.')
 	}
 	return profile
 }

@@ -14,7 +14,7 @@ export interface SessionUser {
 	email: string
 	role: UserRole
 	companyName: string
-	membershipStatus?: 'active' | 'invited'
+	membershipStatus?: 'active' | 'invited' | 'disabled'
 }
 
 export interface TeamMember {
@@ -22,7 +22,7 @@ export interface TeamMember {
 	name: string
 	email: string
 	role: UserRole
-	status: 'active' | 'invited'
+	status: 'active' | 'invited' | 'disabled'
 }
 
 export interface Vehicle {
@@ -47,8 +47,11 @@ export interface Driver {
 	costCenter: string
 	monthlySpend: number
 	personalSpend: number
-	accountStatus?: 'not_invited' | 'invited' | 'active'
+	accountStatus?: 'not_invited' | 'invited' | 'active' | 'disabled'
+	accountUserId?: string
 }
+
+export type AccountLifecycleAction = 'resend_invitation' | 'revoke_invitation' | 'disable' | 'reactivate'
 
 export interface DriverWorkspace {
 	driver: Driver
