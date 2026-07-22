@@ -12,6 +12,7 @@ import {
 } from './auth.ts'
 import {
 	createDriver,
+	createDriverTransaction,
 	createTransaction,
 	createVehicle,
 	getWorkspace,
@@ -19,14 +20,17 @@ import {
 	getTeam,
 	toggleService,
 	updateDriver,
+	updateDriverTransaction,
 	updateTransaction,
 	updateVehicle,
+	withdrawDriverTransaction,
 } from './database.ts'
 import { ApiError, corsHeaders, json, readJson } from './http.ts'
 import {
 	accountLifecycleSchema,
 	driverPayloadSchema,
 	driverInvitationSchema,
+	driverTransactionPayloadSchema,
 	loginSchema,
 	serviceIdSchema,
 	teamInvitationSchema,
@@ -113,6 +117,25 @@ Deno.serve(async (request) => {
 		if (request.method === 'GET' && path === '/driver/workspace') {
 			requireRole(session, ['driver'])
 			return json(await getDriverWorkspace(session.companyId, session.id))
+		}
+
+		if (request.method === 'POST' && path === '/driver/transactions') {
+			requireRole(session, ['driver'])
+			const payload = driverTransactionPayloadSchema.parse(await readJson(request))
+			return json(await createDriverTransaction(session.companyId, session.id, payload), 201)
+		}
+
+		if (request.method === 'POST' && path.startsWith('/driver/transactions/') && path.endsWith('/withdraw')) {
+			requireRole(session, ['driver'])
+			const transactionId = decodeURIComponent(path.slice('/driver/transactions/'.length, -'/withdraw'.length))
+			return json(await withdrawDriverTransaction(session.companyId, session.id, transactionId))
+		}
+
+		if (request.method === 'PATCH' && path.startsWith('/driver/transactions/')) {
+			requireRole(session, ['driver'])
+			const transactionId = decodeURIComponent(path.slice('/driver/transactions/'.length))
+			const payload = driverTransactionPayloadSchema.parse(await readJson(request))
+			return json(await updateDriverTransaction(session.companyId, session.id, transactionId, payload))
 		}
 
 		if (request.method === 'GET' && path === '/workspace') {

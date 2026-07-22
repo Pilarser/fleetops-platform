@@ -103,6 +103,7 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			return {
 				driver,
 				vehicle: database.vehicles.find((vehicle) => vehicle.id === driver.vehicleId) ?? null,
+				services: database.services.filter((service) => service.enabled),
 				transactions: database.transactions.filter((transaction) => transaction.driverId === driver.id),
 			}
 		},

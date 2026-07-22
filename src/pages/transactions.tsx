@@ -228,6 +228,7 @@ export function TransactionsPage() {
 						<option value="approved">Approved</option>
 						<option value="pending">Pending</option>
 						<option value="rejected">Rejected</option>
+						<option value="withdrawn">Withdrawn</option>
 					</SelectInput>
 					<span>{filteredTransactions.length} transactions</span>
 				</Toolbar>
@@ -331,7 +332,7 @@ export function TransactionsPage() {
 						{selectedTransaction.reviewedByName ? <Detail label="Reviewed by" value={selectedTransaction.reviewedByName} /> : null}
 						{selectedTransaction.reviewedAt ? <Detail label="Reviewed at" value={new Date(selectedTransaction.reviewedAt).toLocaleString()} /> : null}
 						{selectedTransaction.rejectionReason ? <Detail label="Rejection reason" value={selectedTransaction.rejectionReason} /> : null}
-						{canReview ? (
+						{canReview && selectedTransaction.status === 'pending' ? (
 							<>
 								<Field label="Expense classification">
 									<SelectInput value={reviewExpenseType} onChange={(event) => setReviewExpenseType(event.target.value as Transaction['expenseType'])}>

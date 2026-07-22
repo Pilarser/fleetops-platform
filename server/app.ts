@@ -4,6 +4,7 @@ import { createSession, prismaAuthProvider, requireRole, requireUser, type AuthP
 import { readBody, sendJson } from './http'
 import {
 	driverPayloadSchema,
+	driverTransactionPayloadSchema,
 	loginSchema,
 	serviceIdSchema,
 	transactionPayloadSchema,
@@ -71,6 +72,71 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					return
 				}
 				sendJson(response, 200, workspace)
+				return
+			}
+
+			if (method === 'POST' && url.pathname === '/api/driver/transactions') {
+				const driverUser = requireRole(request, response, ['driver'])
+				if (!driverUser) return
+				const payload = driverTransactionPayloadSchema.parse(await readBody(request))
+				const workspace = await store.getDriverWorkspace(driverUser.id)
+				if (!workspace) {
+					sendJson(response, 404, { message: 'Driver profile not found' })
+					return
+				}
+				if (workspace.driver.status !== 'active') {
+					sendJson(response, 409, { message: 'Your driver profile is suspended' })
+					return
+				}
+				if (!workspace.vehicle || workspace.vehicle.status !== 'active') {
+					sendJson(response, 409, { message: 'An active vehicle must be assigned before submitting an expense' })
+					return
+				}
+				if (!workspace.services.some((service) => service.id === payload.service)) {
+					sendJson(response, 400, { message: 'Mobility service is not enabled' })
+					return
+				}
+				const transaction: Transaction = {
+					...payload,
+					id: nextId('transaction'),
+					driverId: workspace.driver.id,
+					vehicleId: workspace.vehicle.id,
+					status: 'pending',
+				}
+				sendJson(response, 201, await store.createTransaction(transaction))
+				return
+			}
+
+			if (method === 'POST' && url.pathname.startsWith('/api/driver/transactions/') && url.pathname.endsWith('/withdraw')) {
+				const driverUser = requireRole(request, response, ['driver'])
+				if (!driverUser) return
+				const id = decodeURIComponent(url.pathname.slice('/api/driver/transactions/'.length, -'/withdraw'.length))
+				const workspace = await store.getDriverWorkspace(driverUser.id)
+				const current = workspace?.transactions.find((transaction) => transaction.id === id && transaction.status === 'pending')
+				if (!current) {
+					sendJson(response, 409, { message: 'Only your pending transactions can be withdrawn' })
+					return
+				}
+				sendJson(response, 200, await store.updateTransaction({ ...current, status: 'withdrawn' }))
+				return
+			}
+
+			if (method === 'PATCH' && url.pathname.startsWith('/api/driver/transactions/')) {
+				const driverUser = requireRole(request, response, ['driver'])
+				if (!driverUser) return
+				const id = decodeURIComponent(url.pathname.slice('/api/driver/transactions/'.length))
+				const payload = driverTransactionPayloadSchema.parse(await readBody(request))
+				const workspace = await store.getDriverWorkspace(driverUser.id)
+				const current = workspace?.transactions.find((transaction) => transaction.id === id && transaction.status === 'pending')
+				if (!current) {
+					sendJson(response, 409, { message: 'Only your pending transactions can be edited' })
+					return
+				}
+				if (!workspace?.services.some((service) => service.id === payload.service)) {
+					sendJson(response, 400, { message: 'Mobility service is not enabled' })
+					return
+				}
+				sendJson(response, 200, await store.updateTransaction({ ...current, ...payload }))
 				return
 			}
 
@@ -192,7 +258,7 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 				}
 				const id = decodeURIComponent(url.pathname.replace('/api/transactions/', ''))
 				const payload = transactionReviewSchema.parse(await readBody(request))
-				const current = (await store.getWorkspace()).transactions.find((transaction) => transaction.id === id)
+				const current = (await store.getWorkspace()).transactions.find((transaction) => transaction.id === id && transaction.status === 'pending')
 				const updatedTransaction = current
 					? await store.updateTransaction({
 							...current,
@@ -205,7 +271,7 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 						})
 					: undefined
 				if (!updatedTransaction) {
-					sendJson(response, 404, { message: 'Transaction not found' })
+					sendJson(response, 409, { message: 'Only pending transactions can be reviewed' })
 					return
 				}
 				sendJson(response, 200, updatedTransaction)

@@ -57,7 +57,7 @@ function normalizeServiceType(service: string): ServiceType {
 }
 
 function normalizeTransactionStatus(status: string): TransactionStatus {
-	if (status === 'pending' || status === 'rejected') {
+	if (status === 'pending' || status === 'rejected' || status === 'withdrawn') {
 		return status
 	}
 	return 'approved'
@@ -179,13 +179,15 @@ export function createPrismaFleetStore(): FleetStore {
 		getDriverWorkspace: async (userId) => {
 			const driver = await prisma.driver.findFirst({ where: { companyId, userId } })
 			if (!driver) return undefined
-			const [vehicle, transactions] = await Promise.all([
+			const [vehicle, services, transactions] = await Promise.all([
 				driver.vehicleId ? prisma.vehicle.findFirst({ where: { companyId, id: driver.vehicleId } }) : null,
+				prisma.mobilityService.findMany({ orderBy: { name: 'asc' }, where: { companyId, enabled: true } }),
 				prisma.fleetTransaction.findMany({ orderBy: { date: 'desc' }, where: { companyId, driverId: driver.id } }),
 			])
 			return {
 				driver: mapDriver(driver),
 				vehicle: vehicle ? mapVehicle(vehicle, [driver]) : null,
+				services: services.map(mapService),
 				transactions: transactions.map(mapTransaction),
 			}
 		},
@@ -321,6 +323,11 @@ export function createPrismaFleetStore(): FleetStore {
 				const updatedTransaction = await prisma.fleetTransaction.update({
 					where: { id: transaction.id },
 					data: {
+						date: transaction.date,
+						service: transaction.service,
+						provider: transaction.provider,
+						amount: transaction.amount,
+						vat: transaction.vat,
 						status: transaction.status,
 						expenseType: transaction.expenseType,
 						reviewedById: transaction.reviewedById,

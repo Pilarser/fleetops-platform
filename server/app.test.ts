@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { SessionUser } from '../src/types'
+import type { SessionUser, Transaction } from '../src/types'
 import { createFleetServer } from './app'
 import { createFleetStore } from './storage'
 
@@ -301,7 +301,7 @@ describe('fleet API', () => {
 		})
 		assert.equal(invalidRejectionResponse.status, 400)
 
-		const rejectionResponse = await fetch(`${baseUrl}/api/transactions/${created.id}`, {
+		const repeatedReviewResponse = await fetch(`${baseUrl}/api/transactions/${created.id}`, {
 			method: 'PATCH',
 			headers: {
 				authorization: `Bearer ${token}`,
@@ -311,6 +311,26 @@ describe('fleet API', () => {
 				status: 'rejected',
 				expenseType: 'personal',
 				rejectionReason: 'Receipt does not match the submitted amount',
+			}),
+		})
+		assert.equal(repeatedReviewResponse.status, 409)
+
+		const secondCreateResponse = await fetch(`${baseUrl}/api/transactions`, {
+			method: 'POST',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({
+				date: '2026-07-20', driverId: driver.id, vehicleId: vehicle.id, service: service.id,
+				provider: 'Rejection Test Provider', amount: 20, vat: 3, expenseType: 'business',
+			}),
+		})
+		const secondCreated = (await secondCreateResponse.json()) as { id: string }
+		assert.equal(secondCreateResponse.status, 201)
+
+		const rejectionResponse = await fetch(`${baseUrl}/api/transactions/${secondCreated.id}`, {
+			method: 'PATCH',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({
+				status: 'rejected', expenseType: 'personal', rejectionReason: 'Receipt does not match the submitted amount',
 			}),
 		})
 		assert.equal(rejectionResponse.status, 200)
@@ -354,6 +374,81 @@ describe('fleet API', () => {
 		})
 
 		assert.equal(response.status, 403)
+	})
+
+	it('lets drivers submit, edit, and withdraw only their own pending expenses', async () => {
+		const adminToken = await login()
+		const adminWorkspace = await getWorkspace(adminToken)
+		const driver = adminWorkspace.drivers.find((item) => item.id === 'driver-1')
+		const vehicle = adminWorkspace.vehicles.find((item) => item.status === 'active')
+		assert.ok(driver)
+		assert.ok(vehicle)
+		const assignmentResponse = await fetch(`${baseUrl}/api/drivers/${driver.id}`, {
+			method: 'PATCH',
+			headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+			body: JSON.stringify({ ...driver, vehicleId: vehicle.id }),
+		})
+		assert.equal(assignmentResponse.status, 200)
+
+		const token = await login('driver@example.com')
+		const driverWorkspaceResponse = await fetch(`${baseUrl}/api/driver/workspace`, {
+			headers: { authorization: `Bearer ${token}` },
+		})
+		const driverWorkspace = (await driverWorkspaceResponse.json()) as Awaited<ReturnType<typeof store.getDriverWorkspace>>
+		assert.ok(driverWorkspace?.vehicle)
+		assert.ok(driverWorkspace.services[0])
+
+		const createResponse = await fetch(`${baseUrl}/api/driver/transactions`, {
+			method: 'POST',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({
+				date: '2026-07-21',
+				service: driverWorkspace.services[0].id,
+				provider: 'Driver Submission Provider',
+				amount: 32.5,
+				vat: 5.5,
+				expenseType: 'business',
+			}),
+		})
+		const created = (await createResponse.json()) as Transaction
+		assert.equal(createResponse.status, 201)
+		assert.equal(created.driverId, driverWorkspace.driver.id)
+		assert.equal(created.vehicleId, driverWorkspace.vehicle.id)
+		assert.equal(created.status, 'pending')
+
+		const otherDriverTransaction = (await store.getWorkspace()).transactions.find((transaction) => transaction.driverId !== driverWorkspace.driver.id)
+		assert.ok(otherDriverTransaction)
+		const forbiddenEdit = await fetch(`${baseUrl}/api/driver/transactions/${otherDriverTransaction.id}`, {
+			method: 'PATCH',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({ date: '2026-07-21', service: driverWorkspace.services[0].id, provider: 'Tampered', amount: 1, vat: 0, expenseType: 'personal' }),
+		})
+		assert.equal(forbiddenEdit.status, 409)
+
+		const editResponse = await fetch(`${baseUrl}/api/driver/transactions/${created.id}`, {
+			method: 'PATCH',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({ date: '2026-07-21', service: driverWorkspace.services[0].id, provider: 'Updated Driver Provider', amount: 30, vat: 5, expenseType: 'personal' }),
+		})
+		const edited = (await editResponse.json()) as Transaction
+		assert.equal(editResponse.status, 200)
+		assert.equal(edited.provider, 'Updated Driver Provider')
+		assert.equal(edited.expenseType, 'personal')
+
+		const withdrawResponse = await fetch(`${baseUrl}/api/driver/transactions/${created.id}/withdraw`, {
+			method: 'POST',
+			headers: { authorization: `Bearer ${token}` },
+		})
+		const withdrawn = (await withdrawResponse.json()) as Transaction
+		assert.equal(withdrawResponse.status, 200)
+		assert.equal(withdrawn.status, 'withdrawn')
+
+		const editWithdrawn = await fetch(`${baseUrl}/api/driver/transactions/${created.id}`, {
+			method: 'PATCH',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({ date: '2026-07-21', service: driverWorkspace.services[0].id, provider: 'Too late', amount: 1, vat: 0, expenseType: 'business' }),
+		})
+		assert.equal(editWithdrawn.status, 409)
 	})
 
 	it('blocks driver role from admin workspace access', async () => {

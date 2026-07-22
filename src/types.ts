@@ -1,6 +1,6 @@
 export type ServiceType = 'fuel' | 'charging' | 'parking' | 'fines' | 'wash' | 'tolls' | 'area_c' | 'taxi'
 
-export type TransactionStatus = 'approved' | 'pending' | 'rejected'
+export type TransactionStatus = 'approved' | 'pending' | 'rejected' | 'withdrawn'
 
 export type VehicleStatus = 'active' | 'maintenance' | 'inactive'
 
@@ -56,8 +56,11 @@ export type AccountLifecycleAction = 'resend_invitation' | 'revoke_invitation' |
 export interface DriverWorkspace {
 	driver: Driver
 	vehicle: Vehicle | null
+	services: MobilityService[]
 	transactions: Transaction[]
 }
+
+export type DriverTransactionDraft = Pick<Transaction, 'date' | 'service' | 'provider' | 'amount' | 'vat' | 'expenseType'>
 
 export interface MobilityService {
 	id: ServiceType

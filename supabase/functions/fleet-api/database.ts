@@ -78,6 +78,8 @@ type TransactionPayload = {
 	expenseType: 'business' | 'personal'
 }
 
+type DriverTransactionPayload = Omit<TransactionPayload, 'driverId' | 'vehicleId'>
+
 type TransactionReview = {
 	status: 'approved' | 'rejected'
 	expenseType: 'business' | 'personal'
@@ -172,10 +174,11 @@ export async function getDriverWorkspace(companyId: string, userId: string) {
 		throw new ApiError(404, 'Driver profile not found')
 	}
 
-	const [vehicles, transactions] = await Promise.all([
+	const [vehicles, services, transactions] = await Promise.all([
 		driver.vehicleId
 			? sql<DbVehicle[]>`select id, plate, make, model, "fuelType", status, "costCenter", "monthlySpend", "mileageKm" from "Vehicle" where id = ${driver.vehicleId} and "companyId" = ${companyId}`
 			: Promise.resolve([] as DbVehicle[]),
+		sql`select type as id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} and enabled = true order by name asc`,
 		sql<DbTransaction[]>`
 			select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
 			from "FleetTransaction"
@@ -187,8 +190,70 @@ export async function getDriverWorkspace(companyId: string, userId: string) {
 	return {
 		driver: mapDriver(driver),
 		vehicle: vehicles[0] ? mapVehicle(vehicles[0], [driver]) : null,
+		services: services.map((service) => ({ ...service, monthlyLimit: Number(service.monthlyLimit) })),
 		transactions: transactions.map(mapTransaction),
 	}
+}
+
+async function driverSubmissionContext(transaction: TransactionSql, companyId: string, userId: string) {
+	const [driver] = await transaction<{ id: string; status: string; vehicleId: string | null }[]>`
+		select id, status, "vehicleId" from "Driver"
+		where "companyId" = ${companyId} and "userId" = ${userId}
+		limit 1
+	`
+	if (!driver) throw new ApiError(404, 'Driver profile not found')
+	if (driver.status !== 'active') throw new ApiError(409, 'Your driver profile is suspended')
+	if (!driver.vehicleId) throw new ApiError(409, 'An active vehicle must be assigned before submitting an expense')
+	const [vehicle] = await transaction`select id from "Vehicle" where id = ${driver.vehicleId} and "companyId" = ${companyId} and status = 'active'`
+	if (!vehicle) throw new ApiError(409, 'Your assigned vehicle is not active')
+	return { driverId: driver.id, vehicleId: driver.vehicleId }
+}
+
+async function ensureEnabledService(transaction: TransactionSql, companyId: string, service: string) {
+	const [enabledService] = await transaction`select type from "MobilityService" where type = ${service} and "companyId" = ${companyId} and enabled = true`
+	if (!enabledService) throw new ApiError(400, 'Mobility service is not enabled')
+}
+
+export async function createDriverTransaction(companyId: string, userId: string, payload: DriverTransactionPayload) {
+	return sql.begin(async (transaction) => {
+		const context = await driverSubmissionContext(transaction, companyId, userId)
+		await ensureEnabledService(transaction, companyId, payload.service)
+		const id = `transaction-${crypto.randomUUID()}`
+		const [created] = await transaction<DbTransaction[]>`
+			insert into "FleetTransaction" (id, "companyId", date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "createdAt", "updatedAt")
+			values (${id}, ${companyId}, ${payload.date}, ${context.driverId}, ${context.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, 'pending', ${payload.expenseType}, now(), now())
+			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
+		`
+		return mapTransaction(created)
+	})
+}
+
+export async function updateDriverTransaction(companyId: string, userId: string, transactionId: string, payload: DriverTransactionPayload) {
+	return sql.begin(async (transaction) => {
+		await ensureEnabledService(transaction, companyId, payload.service)
+		const [updated] = await transaction<DbTransaction[]>`
+			update "FleetTransaction" ft
+			set date = ${payload.date}, service = ${payload.service}, provider = ${payload.provider}, amount = ${payload.amount}, vat = ${payload.vat}, "expenseType" = ${payload.expenseType}, "updatedAt" = now()
+			from "Driver" d
+			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
+				and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${userId}
+			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason"
+		`
+		if (!updated) throw new ApiError(409, 'Only your pending transactions can be edited')
+		return mapTransaction(updated)
+	})
+}
+
+export async function withdrawDriverTransaction(companyId: string, userId: string, transactionId: string) {
+	const [updated] = await sql<DbTransaction[]>`
+		update "FleetTransaction" ft set status = 'withdrawn', "updatedAt" = now()
+		from "Driver" d
+		where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
+			and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${userId}
+		returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason"
+	`
+	if (!updated) throw new ApiError(409, 'Only your pending transactions can be withdrawn')
+	return mapTransaction(updated)
 }
 
 export async function getTeam(companyId: string) {
@@ -370,11 +435,11 @@ export async function updateTransaction(
 			"reviewedAt" = now(),
 			"rejectionReason" = ${payload.status === 'rejected' ? payload.rejectionReason ?? null : null},
 			"updatedAt" = now()
-		where id = ${transactionId} and "companyId" = ${companyId}
+		where id = ${transactionId} and "companyId" = ${companyId} and status = 'pending'
 		returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
 	`
 	if (!updated) {
-		throw new ApiError(404, 'Transaction not found')
+		throw new ApiError(409, 'Only pending transactions can be reviewed')
 	}
 	return mapTransaction(updated)
 }

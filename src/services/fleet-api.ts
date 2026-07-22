@@ -1,4 +1,4 @@
-import type { AccountLifecycleAction, Driver, DriverWorkspace, MobilityService, ProviderLocation, SessionUser, TeamMember, Transaction, Vehicle } from '../types'
+import type { AccountLifecycleAction, Driver, DriverTransactionDraft, DriverWorkspace, MobilityService, ProviderLocation, SessionUser, TeamMember, Transaction, Vehicle } from '../types'
 
 export interface FleetWorkspacePayload {
 	drivers: Driver[]
@@ -77,6 +77,12 @@ export const fleetApi = {
 		}),
 	getWorkspace: () => request<FleetWorkspacePayload>('/workspace'),
 	getDriverWorkspace: () => request<DriverWorkspace>('/driver/workspace'),
+	createDriverTransaction: (transaction: DriverTransactionDraft) =>
+		request<Transaction>('/driver/transactions', { method: 'POST', body: JSON.stringify(transaction) }),
+	updateDriverTransaction: (transactionId: string, transaction: DriverTransactionDraft) =>
+		request<Transaction>(`/driver/transactions/${transactionId}`, { method: 'PATCH', body: JSON.stringify(transaction) }),
+	withdrawDriverTransaction: (transactionId: string) =>
+		request<Transaction>(`/driver/transactions/${transactionId}/withdraw`, { method: 'POST' }),
 	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>) =>
 		request<Driver>('/drivers', {
 			method: 'POST',

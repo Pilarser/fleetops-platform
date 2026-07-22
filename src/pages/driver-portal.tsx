@@ -1,19 +1,33 @@
-import { useEffect, useState } from 'react'
-import { Car, CreditCard, LoaderCircle, Route } from 'lucide-react'
-import { Badge, Card, EmptyState, MetricCard, PageHeader, Table } from '../components/ui'
+import { type FormEvent, useEffect, useState } from 'react'
+import { Car, CreditCard, LoaderCircle, Pencil, Plus, Route, Undo2 } from 'lucide-react'
+import { Badge, Button, Card, Dialog, Drawer, EmptyState, Field, MetricCard, PageHeader, SelectInput, Table, TextInput } from '../components/ui'
 import { formatCurrency, formatNumber } from '../data/formatters'
 import { fleetApi } from '../services/fleet-api'
-import type { DriverWorkspace } from '../types'
+import type { DriverTransactionDraft, DriverWorkspace, ServiceType, Transaction } from '../types'
 import { statusTone } from './helpers'
 
-function serviceLabel(service: string) {
-	const label = service.replace('_', ' ')
-	return label.charAt(0).toUpperCase() + label.slice(1)
+function today() {
+	const date = new Date()
+	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function transactionDraft(transaction?: Transaction, service: ServiceType = 'fuel'): DriverTransactionDraft {
+	return transaction
+		? { date: transaction.date, service: transaction.service, provider: transaction.provider, amount: transaction.amount, vat: transaction.vat, expenseType: transaction.expenseType }
+		: { date: today(), service, provider: '', amount: 0, vat: 0, expenseType: 'business' }
 }
 
 export function DriverPortalPage() {
 	const [workspace, setWorkspace] = useState<DriverWorkspace | null>(null)
 	const [error, setError] = useState('')
+	const [success, setSuccess] = useState('')
+	const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+	const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+	const [isFormOpen, setIsFormOpen] = useState(false)
+	const [draft, setDraft] = useState<DriverTransactionDraft>(transactionDraft())
+	const [formError, setFormError] = useState('')
+	const [isSaving, setIsSaving] = useState(false)
+	const [isWithdrawing, setIsWithdrawing] = useState(false)
 
 	useEffect(() => {
 		fleetApi.getDriverWorkspace()
@@ -21,22 +35,84 @@ export function DriverPortalPage() {
 			.catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Unable to load driver workspace'))
 	}, [])
 
-	if (error) {
-		return <EmptyState title="Unable to load driver workspace" detail={error} />
+	if (error) return <EmptyState title="Unable to load driver workspace" detail={error} />
+	if (!workspace) return <div className="workspace-state" role="status"><LoaderCircle className="workspace-spinner" size={28} /><strong>Loading workspace</strong></div>
+
+	const canSubmit = workspace.driver.status === 'active' && workspace.vehicle?.status === 'active' && workspace.services.length > 0
+	const activeTransactions = workspace.transactions.filter((transaction) => transaction.status !== 'withdrawn')
+	const totalSpend = activeTransactions.reduce((total, transaction) => total + transaction.amount, 0)
+	const personalSpend = activeTransactions.filter((transaction) => transaction.expenseType === 'personal').reduce((total, transaction) => total + transaction.amount, 0)
+
+	function serviceLabel(service: string) {
+		return workspace?.services.find((item) => item.id === service)?.name ?? service.replace('_', ' ')
 	}
 
-	if (!workspace) {
-		return <div className="workspace-state" role="status"><LoaderCircle className="workspace-spinner" size={28} /><strong>Loading workspace</strong></div>
+	function openCreate() {
+		setEditingTransaction(null)
+		setDraft(transactionDraft(undefined, workspace?.services[0]?.id))
+		setFormError('')
+		setSuccess('')
+		setIsFormOpen(true)
 	}
 
-	const totalSpend = workspace.transactions.reduce((total, transaction) => total + transaction.amount, 0)
-	const personalSpend = workspace.transactions
-		.filter((transaction) => transaction.expenseType === 'personal')
-		.reduce((total, transaction) => total + transaction.amount, 0)
+	function openEdit(transaction: Transaction) {
+		setSelectedTransaction(null)
+		setEditingTransaction(transaction)
+		setDraft(transactionDraft(transaction))
+		setFormError('')
+		setSuccess('')
+		setIsFormOpen(true)
+	}
+
+	async function saveTransaction(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault()
+		if (!workspace) return
+		setFormError('')
+		if (draft.vat > draft.amount) return setFormError('VAT cannot exceed the transaction amount.')
+		const defaultService = workspace.services[0]?.id
+		setIsSaving(true)
+		try {
+			const saved = editingTransaction
+				? await fleetApi.updateDriverTransaction(editingTransaction.id, draft)
+				: await fleetApi.createDriverTransaction(draft)
+			setWorkspace((current) => current && ({ ...current, transactions: editingTransaction
+				? current.transactions.map((transaction) => transaction.id === saved.id ? saved : transaction)
+				: [saved, ...current.transactions] }))
+			setSuccess(editingTransaction ? 'Pending expense updated.' : 'Expense submitted for review.')
+			setEditingTransaction(null)
+			setDraft(transactionDraft(undefined, defaultService))
+			setIsFormOpen(false)
+		} catch (saveError) {
+			setFormError(saveError instanceof Error ? saveError.message : 'Unable to save the expense')
+		} finally {
+			setIsSaving(false)
+		}
+	}
+
+	async function withdrawTransaction(transaction: Transaction) {
+		if (!window.confirm('Withdraw this pending expense?')) return
+		setIsWithdrawing(true)
+		try {
+			const withdrawn = await fleetApi.withdrawDriverTransaction(transaction.id)
+			setWorkspace((current) => current && ({ ...current, transactions: current.transactions.map((item) => item.id === withdrawn.id ? withdrawn : item) }))
+			setSelectedTransaction(withdrawn)
+			setSuccess('Expense withdrawn.')
+		} catch (withdrawError) {
+			setError(withdrawError instanceof Error ? withdrawError.message : 'Unable to withdraw the expense')
+		} finally {
+			setIsWithdrawing(false)
+		}
+	}
 
 	return (
 		<>
-			<PageHeader title="Driver dashboard" description={`${workspace.driver.name} - ${workspace.driver.costCenter}`} />
+			<PageHeader
+				title="Driver dashboard"
+				description={`${workspace.driver.name} - ${workspace.driver.costCenter}`}
+				actions={<Button type="button" disabled={!canSubmit} onClick={openCreate}><Plus size={16} /> Submit expense</Button>}
+			/>
+			{success ? <p className="page-success" role="status">{success}</p> : null}
+			{!canSubmit ? <p className="page-error" role="alert">An active driver, assigned vehicle, and enabled service are required to submit expenses.</p> : null}
 			<div className="metrics-grid driver-metrics">
 				<MetricCard label="Assigned vehicle" value={workspace.vehicle?.plate ?? 'Unassigned'} detail={workspace.vehicle ? `${workspace.vehicle.make} ${workspace.vehicle.model}` : 'No active assignment'} icon={<Car size={20} />} />
 				<MetricCard label="Mileage" value={workspace.vehicle ? `${formatNumber(workspace.vehicle.mileageKm)} km` : '-'} detail="Recorded vehicle mileage" icon={<Route size={20} />} />
@@ -45,26 +121,51 @@ export function DriverPortalPage() {
 			</div>
 
 			<Card>
-				<div className="section-heading">
-					<div><h2>Your transactions</h2><p>{workspace.transactions.length} recorded transactions</p></div>
-				</div>
+				<div className="section-heading"><div><h2>Your transactions</h2><p>{workspace.transactions.length} recorded transactions</p></div></div>
 				{workspace.transactions.length > 0 ? (
-					<Table
-						columns={['Date', 'Service', 'Provider', 'Expense', 'Amount', 'Status']}
-						rows={workspace.transactions}
-						renderRow={(transaction) => (
-							<tr key={transaction.id}>
-								<td>{transaction.date}</td>
-								<td>{serviceLabel(transaction.service)}</td>
-								<td>{transaction.provider}</td>
-								<td><Badge tone={transaction.expenseType === 'personal' ? 'amber' : 'blue'}>{transaction.expenseType}</Badge></td>
-								<td><strong>{formatCurrency(transaction.amount)}</strong></td>
-								<td><Badge tone={statusTone(transaction.status)}>{transaction.status}</Badge></td>
-							</tr>
-						)}
-					/>
-				) : <EmptyState title="No transactions" detail="No mobility transactions are assigned to your driver profile." />}
+					<Table columns={['Date', 'Service', 'Provider', 'Expense', 'Amount', 'Status', '']} rows={workspace.transactions} renderRow={(transaction) => (
+						<tr key={transaction.id}>
+							<td>{transaction.date}</td><td>{serviceLabel(transaction.service)}</td><td>{transaction.provider}</td>
+							<td><Badge tone={transaction.expenseType === 'personal' ? 'amber' : 'blue'}>{transaction.expenseType}</Badge></td>
+							<td><strong>{formatCurrency(transaction.amount)}</strong></td><td><Badge tone={statusTone(transaction.status)}>{transaction.status}</Badge></td>
+							<td><Button type="button" variant="ghost" onClick={() => setSelectedTransaction(transaction)}>Details</Button></td>
+						</tr>
+					)} />
+				) : <EmptyState title="No transactions" detail="Submit your first mobility expense for review." />}
 			</Card>
+
+			{isFormOpen ? (
+				<Dialog title={editingTransaction ? 'Edit pending expense' : 'Submit expense'} onClose={() => { setIsFormOpen(false); setEditingTransaction(null); setDraft(transactionDraft(undefined, workspace.services[0]?.id)) }}>
+					<form className="form-grid" onSubmit={saveTransaction}>
+						<Field label="Driver"><TextInput disabled value={workspace.driver.name} /></Field>
+						<Field label="Vehicle"><TextInput disabled value={workspace.vehicle?.plate ?? 'Unassigned'} /></Field>
+						<Field label="Date"><TextInput max={today()} required type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></Field>
+						<Field label="Service"><SelectInput required value={draft.service} onChange={(event) => setDraft({ ...draft, service: event.target.value as ServiceType })}>{workspace.services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</SelectInput></Field>
+						<Field label="Provider"><TextInput required value={draft.provider} onChange={(event) => setDraft({ ...draft, provider: event.target.value })} placeholder="Provider name" /></Field>
+						<Field label="Expense type"><SelectInput value={draft.expenseType} onChange={(event) => setDraft({ ...draft, expenseType: event.target.value as Transaction['expenseType'] })}><option value="business">Business</option><option value="personal">Personal</option></SelectInput></Field>
+						<Field label="Amount"><TextInput min="0.01" required step="0.01" type="number" value={draft.amount || ''} onChange={(event) => setDraft({ ...draft, amount: Number(event.target.value) })} /></Field>
+						<Field label="VAT"><TextInput min="0" required step="0.01" type="number" value={draft.vat || ''} onChange={(event) => setDraft({ ...draft, vat: Number(event.target.value) })} /></Field>
+						{formError ? <p className="form-error">{formError}</p> : null}
+						<div className="form-actions"><Button type="button" variant="secondary" disabled={isSaving} onClick={() => { setIsFormOpen(false); setEditingTransaction(null); setDraft(transactionDraft(undefined, workspace.services[0]?.id)) }}>Cancel</Button><Button type="submit" disabled={isSaving}>{isSaving ? <LoaderCircle className="spinner" size={16} /> : null}{isSaving ? 'Saving...' : editingTransaction ? 'Save changes' : 'Submit for review'}</Button></div>
+					</form>
+				</Dialog>
+			) : null}
+
+			{selectedTransaction ? (
+				<Drawer title="Transaction details" onClose={() => setSelectedTransaction(null)}>
+					<div className="detail-list">
+						<Detail label="Date" value={selectedTransaction.date} /><Detail label="Vehicle" value={workspace.vehicle?.plate ?? selectedTransaction.vehicleId} /><Detail label="Service" value={serviceLabel(selectedTransaction.service)} /><Detail label="Provider" value={selectedTransaction.provider} /><Detail label="Expense type" value={selectedTransaction.expenseType} /><Detail label="VAT" value={formatCurrency(selectedTransaction.vat)} /><Detail label="Amount" value={formatCurrency(selectedTransaction.amount)} /><Detail label="Status" value={selectedTransaction.status} />
+						{selectedTransaction.reviewedByName ? <Detail label="Reviewed by" value={selectedTransaction.reviewedByName} /> : null}
+						{selectedTransaction.reviewedAt ? <Detail label="Reviewed at" value={new Date(selectedTransaction.reviewedAt).toLocaleString()} /> : null}
+						{selectedTransaction.rejectionReason ? <Detail label="Rejection reason" value={selectedTransaction.rejectionReason} /> : null}
+						{selectedTransaction.status === 'pending' ? <div className="form-actions"><Button type="button" variant="secondary" disabled={isWithdrawing} onClick={() => void withdrawTransaction(selectedTransaction)}><Undo2 size={16} /> Withdraw</Button><Button type="button" disabled={isWithdrawing} onClick={() => openEdit(selectedTransaction)}><Pencil size={16} /> Edit</Button></div> : null}
+					</div>
+				</Drawer>
+			) : null}
 		</>
 	)
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+	return <div className="detail-row"><span>{label}</span><strong>{value}</strong></div>
 }

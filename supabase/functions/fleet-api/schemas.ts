@@ -61,6 +61,17 @@ export const transactionPayloadSchema = z
 	})
 	.refine((payload) => payload.vat <= payload.amount, { message: 'VAT cannot exceed the transaction amount', path: ['vat'] })
 
+export const driverTransactionPayloadSchema = z
+	.object({
+		date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+		service: serviceIdSchema,
+		provider: z.string().trim().min(1),
+		amount: z.number().positive(),
+		vat: z.number().min(0),
+		expenseType: z.enum(['business', 'personal']),
+	})
+	.refine((payload) => payload.vat <= payload.amount, { message: 'VAT cannot exceed the transaction amount', path: ['vat'] })
+
 export const transactionReviewSchema = z
 	.object({
 		status: z.enum(['approved', 'rejected']),

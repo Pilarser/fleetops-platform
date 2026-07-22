@@ -7,7 +7,7 @@ import { useFleetWorkspace } from '../state/fleet-workspace'
 
 export function DashboardPage() {
 	const { drivers, isLoading, services, transactions, vehicles } = useFleetWorkspace()
-	const monthlySpend = transactions.reduce((total, transaction) => total + transaction.amount, 0)
+	const monthlySpend = transactions.filter((transaction) => transaction.status !== 'withdrawn').reduce((total, transaction) => total + transaction.amount, 0)
 	const pendingTransactions = transactions.filter((transaction) => transaction.status === 'pending').length
 	const enabledServices = services.filter((service) => service.enabled).length
 	const hasVehicle = vehicles.length > 0

@@ -7,7 +7,7 @@ export function ReportsPage() {
 	const { services, transactions } = useFleetWorkspace()
 	const totalsByService = services.map((service) => {
 		const total = transactions
-			.filter((transaction) => transaction.service === service.id)
+			.filter((transaction) => transaction.service === service.id && transaction.status !== 'withdrawn')
 			.reduce((sum, transaction) => sum + transaction.amount, 0)
 
 		return {

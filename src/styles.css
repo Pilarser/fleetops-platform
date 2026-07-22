@@ -387,6 +387,17 @@ a {
 	font-weight: 700;
 }
 
+.page-success {
+	margin: 0 0 16px;
+	padding: 11px 13px;
+	border: 1px solid #b7dfd2;
+	border-radius: 8px;
+	background: #eaf7f2;
+	color: #24584e;
+	font-size: 13px;
+	font-weight: 700;
+}
+
 .demo-credentials {
 	display: grid;
 	gap: 6px;
