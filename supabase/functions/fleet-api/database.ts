@@ -65,6 +65,10 @@ type DbTransaction = {
 	reviewedByName: string | null
 	reviewedAt: Date | string | null
 	rejectionReason: string | null
+	receiptPath: string | null
+	receiptName: string | null
+	receiptMimeType: string | null
+	receiptSize: number | null
 }
 
 type TransactionPayload = {
@@ -125,8 +129,9 @@ function mapVehicle(vehicle: DbVehicle, drivers: DbDriver[]) {
 }
 
 function mapTransaction(transaction: DbTransaction) {
+	const { receiptPath: _receiptPath, ...visibleTransaction } = transaction
 	return {
-		...transaction,
+		...visibleTransaction,
 		amount: Number(transaction.amount),
 		vat: Number(transaction.vat),
 		reviewedAt:
@@ -146,7 +151,7 @@ export async function getWorkspace(companyId: string) {
 		`,
 		sql`select id, name, service, address, city, "distanceKm", status from "ProviderLocation" where "companyId" = ${companyId} order by name asc`,
 		sql`select type as id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} order by name asc`,
-		sql<DbTransaction[]>`select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
+		sql<DbTransaction[]>`select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
 		sql<
 			DbVehicle[]
 		>`select id, plate, make, model, "fuelType", status, "costCenter", "monthlySpend", "mileageKm" from "Vehicle" where "companyId" = ${companyId} order by plate asc`,
@@ -180,7 +185,7 @@ export async function getDriverWorkspace(companyId: string, userId: string) {
 			: Promise.resolve([] as DbVehicle[]),
 		sql`select type as id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} and enabled = true order by name asc`,
 		sql<DbTransaction[]>`
-			select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
+			select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 			from "FleetTransaction"
 			where "companyId" = ${companyId} and "driverId" = ${driver.id}
 			order by date desc
@@ -222,7 +227,7 @@ export async function createDriverTransaction(companyId: string, userId: string,
 		const [created] = await transaction<DbTransaction[]>`
 			insert into "FleetTransaction" (id, "companyId", date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "createdAt", "updatedAt")
 			values (${id}, ${companyId}, ${payload.date}, ${context.driverId}, ${context.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, 'pending', ${payload.expenseType}, now(), now())
-			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
+			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 		`
 		return mapTransaction(created)
 	})
@@ -237,7 +242,7 @@ export async function updateDriverTransaction(companyId: string, userId: string,
 			from "Driver" d
 			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
 				and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${userId}
-			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason"
+			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
 		`
 		if (!updated) throw new ApiError(409, 'Only your pending transactions can be edited')
 		return mapTransaction(updated)
@@ -250,9 +255,49 @@ export async function withdrawDriverTransaction(companyId: string, userId: strin
 		from "Driver" d
 		where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
 			and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${userId}
-		returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason"
+		returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
 	`
 	if (!updated) throw new ApiError(409, 'Only your pending transactions can be withdrawn')
+	return mapTransaction(updated)
+}
+
+export async function getTransactionReceiptAccess(
+	companyId: string,
+	userId: string,
+	role: string,
+	transactionId: string,
+	requirePending: boolean,
+) {
+	const isDriver = role === 'driver'
+	const [transaction] = await sql<{ driverId: string; status: string; receiptPath: string | null; receiptName: string | null }[]>`
+		select ft."driverId", ft.status, ft."receiptPath", ft."receiptName"
+		from "FleetTransaction" ft
+		left join "Driver" d on d.id = ft."driverId" and d."companyId" = ft."companyId"
+		where ft.id = ${transactionId} and ft."companyId" = ${companyId}
+			and (${!isDriver} or d."userId" = ${userId})
+		limit 1
+	`
+	if (!transaction) throw new ApiError(404, 'Transaction not found')
+	if (requirePending && transaction.status !== 'pending') throw new ApiError(409, 'Receipts can only be changed while an expense is pending')
+	return transaction
+}
+
+export async function confirmTransactionReceipt(
+	companyId: string,
+	userId: string,
+	transactionId: string,
+	metadata: { path: string; fileName: string; contentType: string; size: number },
+) {
+	const [updated] = await sql<DbTransaction[]>`
+		update "FleetTransaction" ft
+		set "receiptPath" = ${metadata.path}, "receiptName" = ${metadata.fileName},
+			"receiptMimeType" = ${metadata.contentType}, "receiptSize" = ${metadata.size}, "updatedAt" = now()
+		from "Driver" d
+		where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
+			and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${userId}
+		returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
+	`
+	if (!updated) throw new ApiError(409, 'Receipts can only be changed on your pending expenses')
 	return mapTransaction(updated)
 }
 
@@ -414,7 +459,7 @@ export async function createTransaction(companyId: string, payload: TransactionP
 		const [created] = await transaction<DbTransaction[]>`
 			insert into "FleetTransaction" (id, "companyId", date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "createdAt", "updatedAt")
 			values (${id}, ${companyId}, ${payload.date}, ${payload.driverId}, ${payload.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, 'pending', ${payload.expenseType}, now(), now())
-			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
+			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 		`
 		return mapTransaction(created)
 	})
@@ -436,7 +481,7 @@ export async function updateTransaction(
 			"rejectionReason" = ${payload.status === 'rejected' ? payload.rejectionReason ?? null : null},
 			"updatedAt" = now()
 		where id = ${transactionId} and "companyId" = ${companyId} and status = 'pending'
-		returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason"
+		returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 	`
 	if (!updated) {
 		throw new ApiError(409, 'Only pending transactions can be reviewed')

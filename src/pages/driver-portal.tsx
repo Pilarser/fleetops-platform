@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { Car, CreditCard, LoaderCircle, Pencil, Plus, Route, Undo2 } from 'lucide-react'
+import { Car, CreditCard, Download, LoaderCircle, Pencil, Plus, Route, Undo2 } from 'lucide-react'
 import { Badge, Button, Card, Dialog, Drawer, EmptyState, Field, MetricCard, PageHeader, SelectInput, Table, TextInput } from '../components/ui'
 import { formatCurrency, formatNumber } from '../data/formatters'
 import { fleetApi } from '../services/fleet-api'
@@ -28,6 +28,8 @@ export function DriverPortalPage() {
 	const [formError, setFormError] = useState('')
 	const [isSaving, setIsSaving] = useState(false)
 	const [isWithdrawing, setIsWithdrawing] = useState(false)
+	const [receiptFile, setReceiptFile] = useState<File | null>(null)
+	const [isOpeningReceipt, setIsOpeningReceipt] = useState(false)
 
 	useEffect(() => {
 		fleetApi.getDriverWorkspace()
@@ -51,6 +53,7 @@ export function DriverPortalPage() {
 		setEditingTransaction(null)
 		setDraft(transactionDraft(undefined, workspace?.services[0]?.id))
 		setFormError('')
+		setReceiptFile(null)
 		setSuccess('')
 		setIsFormOpen(true)
 	}
@@ -60,6 +63,7 @@ export function DriverPortalPage() {
 		setEditingTransaction(transaction)
 		setDraft(transactionDraft(transaction))
 		setFormError('')
+		setReceiptFile(null)
 		setSuccess('')
 		setIsFormOpen(true)
 	}
@@ -69,23 +73,53 @@ export function DriverPortalPage() {
 		if (!workspace) return
 		setFormError('')
 		if (draft.vat > draft.amount) return setFormError('VAT cannot exceed the transaction amount.')
+		if (receiptFile && receiptFile.size > 5 * 1024 * 1024) return setFormError('Receipt must be 5 MB or smaller.')
 		const defaultService = workspace.services[0]?.id
 		setIsSaving(true)
 		try {
-			const saved = editingTransaction
+			let saved = editingTransaction
 				? await fleetApi.updateDriverTransaction(editingTransaction.id, draft)
 				: await fleetApi.createDriverTransaction(draft)
+			if (receiptFile) {
+				try {
+					saved = await fleetApi.uploadDriverReceipt(saved.id, receiptFile)
+				} catch (uploadError) {
+					setWorkspace((current) => current && ({ ...current, transactions: editingTransaction
+						? current.transactions.map((transaction) => transaction.id === saved.id ? saved : transaction)
+						: [saved, ...current.transactions] }))
+					setEditingTransaction(saved)
+					setFormError(`Expense saved, but the receipt upload failed. ${uploadError instanceof Error ? uploadError.message : 'Try again.'}`)
+					return
+				}
+			}
 			setWorkspace((current) => current && ({ ...current, transactions: editingTransaction
 				? current.transactions.map((transaction) => transaction.id === saved.id ? saved : transaction)
 				: [saved, ...current.transactions] }))
 			setSuccess(editingTransaction ? 'Pending expense updated.' : 'Expense submitted for review.')
 			setEditingTransaction(null)
 			setDraft(transactionDraft(undefined, defaultService))
+			setReceiptFile(null)
 			setIsFormOpen(false)
 		} catch (saveError) {
 			setFormError(saveError instanceof Error ? saveError.message : 'Unable to save the expense')
 		} finally {
 			setIsSaving(false)
+		}
+	}
+
+	async function openReceipt(transaction: Transaction) {
+		setIsOpeningReceipt(true)
+		try {
+			const { url } = await fleetApi.getReceiptUrl(transaction.id)
+			const link = document.createElement('a')
+			link.href = url
+			link.target = '_blank'
+			link.rel = 'noopener noreferrer'
+			link.click()
+		} catch (receiptError) {
+			window.alert(receiptError instanceof Error ? receiptError.message : 'Unable to open receipt')
+		} finally {
+			setIsOpeningReceipt(false)
 		}
 	}
 
@@ -145,6 +179,10 @@ export function DriverPortalPage() {
 						<Field label="Expense type"><SelectInput value={draft.expenseType} onChange={(event) => setDraft({ ...draft, expenseType: event.target.value as Transaction['expenseType'] })}><option value="business">Business</option><option value="personal">Personal</option></SelectInput></Field>
 						<Field label="Amount"><TextInput min="0.01" required step="0.01" type="number" value={draft.amount || ''} onChange={(event) => setDraft({ ...draft, amount: Number(event.target.value) })} /></Field>
 						<Field label="VAT"><TextInput min="0" required step="0.01" type="number" value={draft.vat || ''} onChange={(event) => setDraft({ ...draft, vat: Number(event.target.value) })} /></Field>
+						<Field label={editingTransaction?.receiptName ? 'Replace receipt (optional)' : 'Receipt (optional)'}>
+							<input className="field" type="file" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setReceiptFile(event.target.files?.[0] ?? null)} />
+							{editingTransaction?.receiptName && !receiptFile ? <small>Current: {editingTransaction.receiptName}</small> : null}
+						</Field>
 						{formError ? <p className="form-error">{formError}</p> : null}
 						<div className="form-actions"><Button type="button" variant="secondary" disabled={isSaving} onClick={() => { setIsFormOpen(false); setEditingTransaction(null); setDraft(transactionDraft(undefined, workspace.services[0]?.id)) }}>Cancel</Button><Button type="submit" disabled={isSaving}>{isSaving ? <LoaderCircle className="spinner" size={16} /> : null}{isSaving ? 'Saving...' : editingTransaction ? 'Save changes' : 'Submit for review'}</Button></div>
 					</form>
@@ -158,6 +196,9 @@ export function DriverPortalPage() {
 						{selectedTransaction.reviewedByName ? <Detail label="Reviewed by" value={selectedTransaction.reviewedByName} /> : null}
 						{selectedTransaction.reviewedAt ? <Detail label="Reviewed at" value={new Date(selectedTransaction.reviewedAt).toLocaleString()} /> : null}
 						{selectedTransaction.rejectionReason ? <Detail label="Rejection reason" value={selectedTransaction.rejectionReason} /> : null}
+						{selectedTransaction.receiptName ? (
+							<div className="detail-row"><span>Receipt</span><Button type="button" variant="secondary" disabled={isOpeningReceipt} onClick={() => void openReceipt(selectedTransaction)}>{isOpeningReceipt ? <LoaderCircle className="spinner" size={16} /> : <Download size={16} />}{selectedTransaction.receiptName}</Button></div>
+						) : <Detail label="Receipt" value="Not attached" />}
 						{selectedTransaction.status === 'pending' ? <div className="form-actions"><Button type="button" variant="secondary" disabled={isWithdrawing} onClick={() => void withdrawTransaction(selectedTransaction)}><Undo2 size={16} /> Withdraw</Button><Button type="button" disabled={isWithdrawing} onClick={() => openEdit(selectedTransaction)}><Pencil size={16} /> Edit</Button></div> : null}
 					</div>
 				</Drawer>

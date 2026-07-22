@@ -1,4 +1,5 @@
 import type { AccountLifecycleAction, Driver, DriverTransactionDraft, DriverWorkspace, MobilityService, ProviderLocation, SessionUser, TeamMember, Transaction, Vehicle } from '../types'
+import { supabaseAuth } from './supabase-auth'
 
 export interface FleetWorkspacePayload {
 	drivers: Driver[]
@@ -83,6 +84,23 @@ export const fleetApi = {
 		request<Transaction>(`/driver/transactions/${transactionId}`, { method: 'PATCH', body: JSON.stringify(transaction) }),
 	withdrawDriverTransaction: (transactionId: string) =>
 		request<Transaction>(`/driver/transactions/${transactionId}/withdraw`, { method: 'POST' }),
+	uploadDriverReceipt: async (transactionId: string, file: File) => {
+		if (!supabaseAuth) throw new Error('Receipt storage is not configured')
+		const metadata = { fileName: file.name, contentType: file.type, size: file.size }
+		const upload = await request<{ bucket: string; path: string; token: string }>(`/driver/transactions/${transactionId}/receipt-upload`, {
+			method: 'POST',
+			body: JSON.stringify(metadata),
+		})
+		const { error } = await supabaseAuth.storage.from(upload.bucket).uploadToSignedUrl(upload.path, upload.token, file, {
+			contentType: file.type,
+		})
+		if (error) throw new Error(error.message)
+		return request<Transaction>(`/driver/transactions/${transactionId}/receipt-confirm`, {
+			method: 'POST',
+			body: JSON.stringify({ ...metadata, path: upload.path }),
+		})
+	},
+	getReceiptUrl: (transactionId: string) => request<{ url: string; expiresIn: number }>(`/transactions/${transactionId}/receipt`),
 	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>) =>
 		request<Driver>('/drivers', {
 			method: 'POST',

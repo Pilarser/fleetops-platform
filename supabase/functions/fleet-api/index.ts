@@ -37,7 +37,10 @@ import {
 	transactionPayloadSchema,
 	transactionReviewSchema,
 	vehiclePayloadSchema,
+	receiptUploadSchema,
+	receiptConfirmationSchema,
 } from './schemas.ts'
+import { confirmReceipt, createReceiptDownload, createReceiptUpload } from './receipts.ts'
 
 const workspaceRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
 const operationsRoles = ['fleet_admin', 'manager', 'support'] as const
@@ -129,6 +132,26 @@ Deno.serve(async (request) => {
 			requireRole(session, ['driver'])
 			const transactionId = decodeURIComponent(path.slice('/driver/transactions/'.length, -'/withdraw'.length))
 			return json(await withdrawDriverTransaction(session.companyId, session.id, transactionId))
+		}
+
+		if (request.method === 'POST' && path.startsWith('/driver/transactions/') && path.endsWith('/receipt-upload')) {
+			requireRole(session, ['driver'])
+			const transactionId = decodeURIComponent(path.slice('/driver/transactions/'.length, -'/receipt-upload'.length))
+			const payload = receiptUploadSchema.parse(await readJson(request))
+			return json(await createReceiptUpload(session, transactionId, payload), 201)
+		}
+
+		if (request.method === 'POST' && path.startsWith('/driver/transactions/') && path.endsWith('/receipt-confirm')) {
+			requireRole(session, ['driver'])
+			const transactionId = decodeURIComponent(path.slice('/driver/transactions/'.length, -'/receipt-confirm'.length))
+			const payload = receiptConfirmationSchema.parse(await readJson(request))
+			return json(await confirmReceipt(session, transactionId, payload))
+		}
+
+		if (request.method === 'GET' && path.startsWith('/transactions/') && path.endsWith('/receipt')) {
+			requireRole(session, ['fleet_admin', 'manager', 'finance', 'driver'])
+			const transactionId = decodeURIComponent(path.slice('/transactions/'.length, -'/receipt'.length))
+			return json(await createReceiptDownload(session, transactionId))
 		}
 
 		if (request.method === 'PATCH' && path.startsWith('/driver/transactions/')) {

@@ -96,4 +96,8 @@ export interface Transaction {
 	reviewedByName?: string | null
 	reviewedAt?: string | null
 	rejectionReason?: string | null
+	receiptPath?: string | null
+	receiptName?: string | null
+	receiptMimeType?: string | null
+	receiptSize?: number | null
 }

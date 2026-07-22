@@ -72,6 +72,16 @@ export const driverTransactionPayloadSchema = z
 	})
 	.refine((payload) => payload.vat <= payload.amount, { message: 'VAT cannot exceed the transaction amount', path: ['vat'] })
 
+export const receiptUploadSchema = z.object({
+	fileName: z.string().trim().min(1).max(180),
+	contentType: z.enum(['application/pdf', 'image/jpeg', 'image/png']),
+	size: z.number().int().positive().max(5 * 1024 * 1024),
+})
+
+export const receiptConfirmationSchema = receiptUploadSchema.extend({
+	path: z.string().min(1).max(500),
+})
+
 export const transactionReviewSchema = z
 	.object({
 		status: z.enum(['approved', 'rejected']),

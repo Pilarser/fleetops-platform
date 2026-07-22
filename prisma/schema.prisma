@@ -120,6 +120,10 @@ model FleetTransaction {
   reviewedByName  String?
   reviewedAt      DateTime?
   rejectionReason String?
+  receiptPath     String?
+  receiptName     String?
+  receiptMimeType String?
+  receiptSize     Int?
   company         Company   @relation(fields: [companyId], references: [id])
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

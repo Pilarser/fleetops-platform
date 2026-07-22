@@ -80,7 +80,7 @@ function authClient() {
 	})
 }
 
-function adminClient() {
+export function adminClient() {
 	return createClient(requiredEnv('SUPABASE_URL'), secretKey(), {
 		auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
 	})

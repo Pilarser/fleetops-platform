@@ -16,6 +16,7 @@ import {
 	Toolbar,
 } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
+import { fleetApi } from '../services/fleet-api'
 import { useAuth } from '../state/auth'
 import { useFleetWorkspace } from '../state/fleet-workspace'
 import type { ServiceType, Transaction, TransactionStatus } from '../types'
@@ -64,6 +65,7 @@ export function TransactionsPage() {
 	const [reviewError, setReviewError] = useState<string | null>(null)
 	const [isReviewing, setIsReviewing] = useState(false)
 	const [isRejecting, setIsRejecting] = useState(false)
+	const [isOpeningReceipt, setIsOpeningReceipt] = useState(false)
 
 	const canCreate = Boolean(user && ['fleet_admin', 'manager', 'finance', 'support'].includes(user.role))
 	const canReview = Boolean(user && ['fleet_admin', 'manager', 'finance'].includes(user.role))
@@ -162,6 +164,23 @@ export function TransactionsPage() {
 			setReviewError(error instanceof Error ? error.message : 'Unable to review the transaction')
 		} finally {
 			setIsReviewing(false)
+		}
+	}
+
+	async function openReceipt(transaction: Transaction) {
+		setIsOpeningReceipt(true)
+		setReviewError(null)
+		try {
+			const { url } = await fleetApi.getReceiptUrl(transaction.id)
+			const link = document.createElement('a')
+			link.href = url
+			link.target = '_blank'
+			link.rel = 'noopener noreferrer'
+			link.click()
+		} catch (error) {
+			setReviewError(error instanceof Error ? error.message : 'Unable to open receipt')
+		} finally {
+			setIsOpeningReceipt(false)
 		}
 	}
 
@@ -332,6 +351,9 @@ export function TransactionsPage() {
 						{selectedTransaction.reviewedByName ? <Detail label="Reviewed by" value={selectedTransaction.reviewedByName} /> : null}
 						{selectedTransaction.reviewedAt ? <Detail label="Reviewed at" value={new Date(selectedTransaction.reviewedAt).toLocaleString()} /> : null}
 						{selectedTransaction.rejectionReason ? <Detail label="Rejection reason" value={selectedTransaction.rejectionReason} /> : null}
+						{selectedTransaction.receiptName ? (
+							<div className="detail-row"><span>Receipt</span><Button type="button" variant="secondary" disabled={isOpeningReceipt} onClick={() => void openReceipt(selectedTransaction)}>{isOpeningReceipt ? <LoaderCircle className="spinner" size={16} /> : <Download size={16} />}{selectedTransaction.receiptName}</Button></div>
+						) : <Detail label="Receipt" value="Not attached" />}
 						{canReview && selectedTransaction.status === 'pending' ? (
 							<>
 								<Field label="Expense classification">
