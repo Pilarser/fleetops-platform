@@ -3,7 +3,6 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { demoUsers } from '../src/data/demo-users'
 import type { SessionUser, UserRole } from '../src/types'
 import { sendJson } from './http'
-import { verifyPassword } from './passwords'
 import { prisma } from './prisma'
 
 const sessions = new Map<string, SessionUser>()
@@ -28,9 +27,7 @@ export async function findUserByCredentials(email: string, password: string) {
 	const isExplicitLocalDemo =
 		process.env.ALLOW_DEMO_AUTH === 'true' &&
 		demoUsers.some((demoUser) => demoUser.email === normalizedEmail && demoUser.password === password)
-	const hasValidPassword = Boolean(user?.password && verifyPassword(password, user.password))
-
-	if (!user || (!hasValidPassword && !isExplicitLocalDemo) || !isUserRole(user.role)) {
+	if (!user || !isExplicitLocalDemo || !isUserRole(user.role)) {
 		return undefined
 	}
 

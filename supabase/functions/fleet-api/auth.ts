@@ -1,7 +1,6 @@
 import { createClient, type Session } from 'supabase'
 import { sql } from './database.ts'
 import { ApiError } from './http.ts'
-import { verifyPassword } from './passwords.ts'
 import { registrationMetadataSchema } from './schemas.ts'
 
 export type UserRole = 'fleet_admin' | 'manager' | 'finance' | 'driver' | 'support'
@@ -27,7 +26,6 @@ type ProfileRecord = {
 	companyId: string
 	name: string
 	email: string
-	password: string | null
 	role: string
 	status: string
 	companyName: string
@@ -112,7 +110,7 @@ function mapProfile(record: ProfileRecord): AuthenticatedProfile {
 
 async function findProfileByAuthUserId(authUserId: string) {
 	const [record] = await sql<ProfileRecord[]>`
-		select u.id, u."authUserId", u."companyId", u.name, u.email, u.password, u.role, u.status, c.name as "companyName"
+		select u.id, u."authUserId", u."companyId", u.name, u.email, u.role, u.status, c.name as "companyName"
 		from "User" u
 		join "Company" c on c.id = u."companyId"
 		where u."authUserId" = ${authUserId}
@@ -129,9 +127,9 @@ async function authenticatedIdentity(request: Request) {
 	return data.user
 }
 
-async function findLegacyProfile(email: string) {
+async function findProfileByEmail(email: string) {
 	const [record] = await sql<ProfileRecord[]>`
-		select u.id, u."authUserId", u."companyId", u.name, u.email, u.password, u.role, u.status, c.name as "companyName"
+		select u.id, u."authUserId", u."companyId", u.name, u.email, u.role, u.status, c.name as "companyName"
 		from "User" u
 		join "Company" c on c.id = u."companyId"
 		where lower(u.email) = ${email}
@@ -143,57 +141,9 @@ async function findLegacyProfile(email: string) {
 async function linkProfile(profileId: string, authUserId: string) {
 	await sql`
 		update "User"
-		set "authUserId" = ${authUserId}, password = null, "updatedAt" = now()
+		set "authUserId" = ${authUserId}, "updatedAt" = now()
 		where id = ${profileId}
 	`
-}
-
-async function findAuthUserByEmail(email: string) {
-	const { data, error } = await adminClient().auth.admin.listUsers({ page: 1, perPage: 1000 })
-	if (error) {
-		throw error
-	}
-	return data.users.find((user) => user.email?.toLowerCase() === email)
-}
-
-async function migrateLegacyUser(record: ProfileRecord, password: string) {
-	if (!record.password || !(await verifyPassword(password, record.password))) {
-		throw new ApiError(401, 'Invalid email or password')
-	}
-
-	const admin = adminClient()
-	const existingAuthUser = await findAuthUserByEmail(record.email.toLowerCase())
-	let authUserId = existingAuthUser?.id
-
-	if (authUserId) {
-		const { error } = await admin.auth.admin.updateUserById(authUserId, {
-			email_confirm: true,
-			password,
-			user_metadata: { name: record.name },
-		})
-		if (error) {
-			throw error
-		}
-	} else {
-		const { data, error } = await admin.auth.admin.createUser({
-			email: record.email,
-			email_confirm: true,
-			password,
-			user_metadata: { name: record.name },
-		})
-		if (error || !data.user) {
-			throw error ?? new Error('Unable to create Supabase Auth user')
-		}
-		authUserId = data.user.id
-	}
-
-	const { data, error } = await authClient().auth.signInWithPassword({ email: record.email, password })
-	if (error || !data.session || !authUserId) {
-		throw error ?? new Error('Unable to create Supabase session')
-	}
-
-	await linkProfile(record.id, authUserId)
-	return { profile: await findProfileByAuthUserId(authUserId), session: data.session }
 }
 
 export async function login(emailValue: string, password: string) {
@@ -205,11 +155,11 @@ export async function login(emailValue: string, password: string) {
 		if (profile) {
 			await linkProfile(profile.id, directLogin.data.user.id)
 		} else {
-			const legacyProfile = await findLegacyProfile(email)
-			if (!legacyProfile || (legacyProfile.authUserId && legacyProfile.authUserId !== directLogin.data.user.id)) {
+			const emailProfile = await findProfileByEmail(email)
+			if (!emailProfile || (emailProfile.authUserId && emailProfile.authUserId !== directLogin.data.user.id)) {
 				throw new ApiError(403, 'User profile is not configured')
 			}
-			await linkProfile(legacyProfile.id, directLogin.data.user.id)
+			await linkProfile(emailProfile.id, directLogin.data.user.id)
 			profile = await findProfileByAuthUserId(directLogin.data.user.id)
 		}
 		if (!profile) {
@@ -221,21 +171,11 @@ export async function login(emailValue: string, password: string) {
 		return { profile, session: directLogin.data.session }
 	}
 
-	const legacyProfile = await findLegacyProfile(email)
-	if (!legacyProfile) {
-		throw new ApiError(401, 'Invalid email or password')
-	}
-	if (legacyProfile.status === 'disabled') {
+	const emailProfile = await findProfileByEmail(email)
+	if (emailProfile?.status === 'disabled') {
 		throw new ApiError(403, 'This account has been disabled. Contact your fleet administrator.')
 	}
-	const migrated = await migrateLegacyUser(legacyProfile, password)
-	if (!migrated.profile) {
-		throw new ApiError(403, 'User profile is not configured')
-	}
-	if (migrated.profile.status === 'disabled') {
-		throw new ApiError(403, 'This account has been disabled. Contact your fleet administrator.')
-	}
-	return { profile: migrated.profile, session: migrated.session }
+	throw new ApiError(401, 'Invalid email or password')
 }
 
 type AccountLifecycleAction = 'resend_invitation' | 'revoke_invitation' | 'disable' | 'reactivate'
@@ -382,8 +322,8 @@ export async function inviteCompanyMember(
 	const profileId = `user-${crypto.randomUUID()}`
 	try {
 		const [member] = await sql`
-			insert into "User" (id, "authUserId", "companyId", name, email, password, role, status, "createdAt", "updatedAt")
-			values (${profileId}, ${data.user.id}, ${session.companyId}, ${payload.name}, ${payload.email}, null, ${payload.role}, 'invited', now(), now())
+			insert into "User" (id, "authUserId", "companyId", name, email, role, status, "createdAt", "updatedAt")
+			values (${profileId}, ${data.user.id}, ${session.companyId}, ${payload.name}, ${payload.email}, ${payload.role}, 'invited', now(), now())
 			returning id, name, email, role, status
 		`
 		return member
@@ -436,8 +376,8 @@ export async function inviteDriverAccount(
 	try {
 		await sql.begin(async (transaction) => {
 			await transaction`
-				insert into "User" (id, "authUserId", "companyId", name, email, password, role, status, "createdAt", "updatedAt")
-				values (${profileId}, ${data.user.id}, ${session.companyId}, ${driver.name}, ${email}, null, 'driver', 'invited', now(), now())
+				insert into "User" (id, "authUserId", "companyId", name, email, role, status, "createdAt", "updatedAt")
+				values (${profileId}, ${data.user.id}, ${session.companyId}, ${driver.name}, ${email}, 'driver', 'invited', now(), now())
 			`
 			const [linkedDriver] = await transaction`
 				update "Driver"
@@ -517,8 +457,8 @@ export async function completeCompanyRegistration(request: Request) {
 			values (${companyId}, ${metadata.company_name}, now(), now())
 		`
 		await transaction`
-			insert into "User" (id, "authUserId", "companyId", name, email, password, role, "createdAt", "updatedAt")
-			values (${profileId}, ${identity.id}, ${companyId}, ${metadata.admin_name}, ${email}, null, 'fleet_admin', now(), now())
+			insert into "User" (id, "authUserId", "companyId", name, email, role, "createdAt", "updatedAt")
+			values (${profileId}, ${identity.id}, ${companyId}, ${metadata.admin_name}, ${email}, 'fleet_admin', now(), now())
 		`
 
 		for (const [type, name, description, enabled, monthlyLimit, requiresApproval] of defaultServices) {

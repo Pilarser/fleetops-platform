@@ -31,7 +31,6 @@ model User {
   companyId String
   name      String
   email     String   @unique
-  password  String?
   role      String
   status    String   @default("active")
   company   Company  @relation(fields: [companyId], references: [id])
