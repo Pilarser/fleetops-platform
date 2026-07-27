@@ -32,7 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 		? navItems.slice(0, 1)
 		: user?.role === 'fleet_admin' && hasSupabaseAuth()
 			? [...navItems, { to: '/team', label: 'Team', icon: UsersRound }]
-			: navItems
+			: navItems.filter((item) => item.to !== '/reports' || user?.role === 'fleet_admin' || user?.role === 'manager' || user?.role === 'finance')
 
 	return (
 		<div className="app-shell">

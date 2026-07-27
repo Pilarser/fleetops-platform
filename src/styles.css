@@ -1346,6 +1346,142 @@ textarea.field {
 	padding: 0 18px 18px;
 }
 
+.report-filters {
+	margin-bottom: 18px;
+}
+
+.report-filter-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 18px;
+	padding: 16px 18px;
+	border-bottom: 1px solid #edf1f5;
+}
+
+.report-filter-heading > div:first-child {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.report-filter-heading > div:first-child > div {
+	display: grid;
+	gap: 3px;
+}
+
+.report-filter-heading svg {
+	color: #1d5b50;
+}
+
+.report-filter-heading span {
+	color: #667085;
+	font-size: 12px;
+}
+
+.segmented-control {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px;
+	border: 1px solid #d8e0e8;
+	border-radius: 8px;
+	background: #f6f8fa;
+}
+
+.segmented-control button {
+	min-height: 30px;
+	padding: 0 11px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: #526071;
+	font-size: 12px;
+	font-weight: 750;
+	cursor: pointer;
+}
+
+.segmented-control button.active {
+	background: #fff;
+	color: #174f46;
+	box-shadow: 0 1px 3px rgb(16 24 40 / 12%);
+}
+
+.segmented-control button:focus-visible {
+	outline: 2px solid #238b74;
+	outline-offset: 1px;
+}
+
+.report-filter-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(150px, 1fr));
+	gap: 14px;
+	padding: 16px 18px 18px;
+}
+
+.report-kpis {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 14px;
+	margin-bottom: 18px;
+}
+
+.report-breakdown {
+	overflow: hidden;
+}
+
+.report-breakdown-heading {
+	align-items: center;
+}
+
+.report-share {
+	display: grid;
+	grid-template-columns: minmax(80px, 140px) 48px;
+	align-items: center;
+	gap: 10px;
+}
+
+.report-share > div {
+	height: 7px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: #e8edf2;
+}
+
+.report-share span {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: #238b74;
+}
+
+.report-share strong {
+	color: #475467;
+	font-size: 12px;
+	text-align: right;
+}
+
+.report-total {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 9px;
+	padding: 14px 18px;
+	border-top: 1px solid #edf1f5;
+	background: #f8fafb;
+	color: #667085;
+	font-size: 13px;
+}
+
+.report-total strong {
+	margin-left: 8px;
+	color: #17202a;
+	font-size: 15px;
+}
+
+.report-total svg:last-child {
+	color: #1d5b50;
+}
+
 .report-row {
 	display: grid;
 	grid-template-columns: minmax(180px, 240px) minmax(180px, 1fr) 100px;
@@ -1395,10 +1531,24 @@ textarea.field {
 	}
 
 	.metrics-grid,
+	.report-kpis,
 	.dashboard-grid,
 	.catalog-grid,
 	.provider-layout {
 		grid-template-columns: 1fr;
+	}
+
+	.report-filter-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.report-breakdown-heading {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.report-breakdown-heading .segmented-control {
+		align-self: flex-start;
 	}
 
 	.setup-steps {
@@ -1507,6 +1657,34 @@ textarea.field {
 
 	.report-row {
 		grid-template-columns: 1fr;
+	}
+
+	.report-filter-heading {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.report-filter-heading .segmented-control {
+		align-self: flex-start;
+	}
+
+	.report-filter-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.report-breakdown-heading .segmented-control {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		width: 100%;
+	}
+
+	.report-share {
+		grid-template-columns: minmax(100px, 1fr) 48px;
+	}
+
+	.report-total {
+		flex-wrap: wrap;
+		justify-content: flex-start;
 	}
 
 	.form-grid {
