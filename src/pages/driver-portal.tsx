@@ -5,6 +5,8 @@ import { formatCurrency, formatNumber } from '../data/formatters'
 import { fleetApi } from '../services/fleet-api'
 import type { DriverTransactionDraft, DriverWorkspace, ServiceType, Transaction } from '../types'
 import { statusTone } from './helpers'
+import { TransactionTimeline } from '../components/transaction-timeline'
+import { useTransactionEvents } from '../hooks/use-transaction-events'
 
 function today() {
 	const date = new Date()
@@ -30,6 +32,10 @@ export function DriverPortalPage() {
 	const [isWithdrawing, setIsWithdrawing] = useState(false)
 	const [receiptFile, setReceiptFile] = useState<File | null>(null)
 	const [isOpeningReceipt, setIsOpeningReceipt] = useState(false)
+	const transactionHistory = useTransactionEvents(
+		selectedTransaction?.id,
+		`${selectedTransaction?.status ?? ''}:${selectedTransaction?.receiptName ?? ''}`,
+	)
 
 	useEffect(() => {
 		fleetApi.getDriverWorkspace()
@@ -200,6 +206,7 @@ export function DriverPortalPage() {
 							<div className="detail-row"><span>Receipt</span><Button type="button" variant="secondary" disabled={isOpeningReceipt} onClick={() => void openReceipt(selectedTransaction)}>{isOpeningReceipt ? <LoaderCircle className="spinner" size={16} /> : <Download size={16} />}{selectedTransaction.receiptName}</Button></div>
 						) : <Detail label="Receipt" value="Not attached" />}
 						{selectedTransaction.status === 'pending' ? <div className="form-actions"><Button type="button" variant="secondary" disabled={isWithdrawing} onClick={() => void withdrawTransaction(selectedTransaction)}><Undo2 size={16} /> Withdraw</Button><Button type="button" disabled={isWithdrawing} onClick={() => openEdit(selectedTransaction)}><Pencil size={16} /> Edit</Button></div> : null}
+						<TransactionTimeline {...transactionHistory} />
 					</div>
 				</Drawer>
 			) : null}

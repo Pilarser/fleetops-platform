@@ -2,6 +2,8 @@ export type ServiceType = 'fuel' | 'charging' | 'parking' | 'fines' | 'wash' | '
 
 export type TransactionStatus = 'approved' | 'pending' | 'rejected' | 'withdrawn'
 
+export type TransactionEventType = 'submitted' | 'edited' | 'receipt_attached' | 'receipt_replaced' | 'approved' | 'rejected' | 'withdrawn'
+
 export type VehicleStatus = 'active' | 'maintenance' | 'inactive'
 
 export type DriverStatus = 'active' | 'suspended'
@@ -100,4 +102,15 @@ export interface Transaction {
 	receiptName?: string | null
 	receiptMimeType?: string | null
 	receiptSize?: number | null
+}
+
+export interface TransactionEvent {
+	id: string
+	transactionId: string
+	type: TransactionEventType
+	actorId: string
+	actorName: string
+	actorRole: string
+	details: Record<string, unknown>
+	createdAt: string
 }

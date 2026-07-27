@@ -1,5 +1,6 @@
 import { createServer } from 'node:http'
-import type { Driver, MobilityService, Transaction, Vehicle } from '../src/types'
+import { randomUUID } from 'node:crypto'
+import type { Driver, MobilityService, SessionUser, Transaction, TransactionEvent, TransactionEventType, Vehicle } from '../src/types'
 import { createSession, prismaAuthProvider, requireRole, requireUser, type AuthProvider } from './auth'
 import { readBody, sendJson } from './http'
 import {
@@ -20,6 +21,31 @@ const transactionReviewRoles = ['fleet_admin', 'manager', 'finance'] as const
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now()}`
+}
+
+function transactionEvent(
+	transactionId: string,
+	actor: SessionUser,
+	type: TransactionEventType,
+	details: Record<string, unknown>,
+): TransactionEvent {
+	return {
+		id: `event-${randomUUID()}`,
+		transactionId,
+		type,
+		actorId: actor.id,
+		actorName: actor.name,
+		actorRole: actor.role,
+		details,
+		createdAt: new Date().toISOString(),
+	}
+}
+
+function transactionChanges(before: Transaction, after: Transaction) {
+	const fields = ['date', 'service', 'provider', 'amount', 'vat', 'expenseType'] as const
+	return Object.fromEntries(fields
+		.filter((field) => before[field] !== after[field])
+		.map((field) => [field, { from: before[field], to: after[field] }]))
 }
 
 export function createFleetServer(store: FleetStore = createFleetStore(), authProvider: AuthProvider = prismaAuthProvider) {
@@ -103,7 +129,12 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					vehicleId: workspace.vehicle.id,
 					status: 'pending',
 				}
-				sendJson(response, 201, await store.createTransaction(transaction))
+				const created = await store.createTransaction(transaction)
+				await store.appendTransactionEvent(transactionEvent(created.id, driverUser, 'submitted', {
+					summary: 'Expense submitted for review.',
+					source: 'driver',
+				}))
+				sendJson(response, 201, created)
 				return
 			}
 
@@ -117,7 +148,9 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					sendJson(response, 409, { message: 'Only your pending transactions can be withdrawn' })
 					return
 				}
-				sendJson(response, 200, await store.updateTransaction({ ...current, status: 'withdrawn' }))
+				const withdrawn = await store.updateTransaction({ ...current, status: 'withdrawn' })
+				if (withdrawn) await store.appendTransactionEvent(transactionEvent(id, driverUser, 'withdrawn', { summary: 'Expense withdrawn by driver.' }))
+				sendJson(response, 200, withdrawn)
 				return
 			}
 
@@ -136,7 +169,33 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					sendJson(response, 400, { message: 'Mobility service is not enabled' })
 					return
 				}
-				sendJson(response, 200, await store.updateTransaction({ ...current, ...payload }))
+				const updated = { ...current, ...payload }
+				const saved = await store.updateTransaction(updated)
+				if (saved) {
+					const changes = transactionChanges(current, saved)
+					if (Object.keys(changes).length > 0) {
+						await store.appendTransactionEvent(transactionEvent(id, driverUser, 'edited', {
+							summary: `${Object.keys(changes).length} expense field${Object.keys(changes).length === 1 ? '' : 's'} updated.`,
+							changes,
+						}))
+					}
+				}
+				sendJson(response, 200, saved)
+				return
+			}
+
+			if (method === 'GET' && url.pathname.startsWith('/api/transactions/') && url.pathname.endsWith('/events')) {
+				const user = requireRole(request, response, ['fleet_admin', 'manager', 'finance', 'driver'])
+				if (!user) return
+				const id = decodeURIComponent(url.pathname.slice('/api/transactions/'.length, -'/events'.length))
+				const transaction = user.role === 'driver'
+					? (await store.getDriverWorkspace(user.id))?.transactions.find((item) => item.id === id)
+					: (await store.getWorkspace()).transactions.find((item) => item.id === id)
+				if (!transaction) {
+					sendJson(response, 404, { message: 'Transaction not found' })
+					return
+				}
+				sendJson(response, 200, await store.getTransactionEvents(id))
 				return
 			}
 
@@ -224,7 +283,8 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 			}
 
 			if (method === 'POST' && url.pathname === '/api/transactions') {
-				if (!requireRole(request, response, [...transactionCreateRoles])) {
+				const creator = requireRole(request, response, [...transactionCreateRoles])
+				if (!creator) {
 					return
 				}
 				const payload = transactionPayloadSchema.parse(await readBody(request))
@@ -247,7 +307,12 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					id: nextId('transaction'),
 					status: 'pending',
 				}
-				sendJson(response, 201, await store.createTransaction(transaction))
+				const created = await store.createTransaction(transaction)
+				await store.appendTransactionEvent(transactionEvent(created.id, creator, 'submitted', {
+					summary: 'Transaction created in the operations portal.',
+					source: 'backoffice',
+				}))
+				sendJson(response, 201, created)
 				return
 			}
 
@@ -274,6 +339,11 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					sendJson(response, 409, { message: 'Only pending transactions can be reviewed' })
 					return
 				}
+				await store.appendTransactionEvent(transactionEvent(id, reviewer, payload.status, {
+					summary: payload.status === 'approved' ? 'Expense approved.' : 'Expense rejected.',
+					expenseType: payload.expenseType,
+					...(payload.rejectionReason ? { rejectionReason: payload.rejectionReason } : {}),
+				}))
 				sendJson(response, 200, updatedTransaction)
 				return
 			}

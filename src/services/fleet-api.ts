@@ -1,4 +1,4 @@
-import type { AccountLifecycleAction, Driver, DriverTransactionDraft, DriverWorkspace, MobilityService, ProviderLocation, SessionUser, TeamMember, Transaction, Vehicle } from '../types'
+import type { AccountLifecycleAction, Driver, DriverTransactionDraft, DriverWorkspace, MobilityService, ProviderLocation, SessionUser, TeamMember, Transaction, TransactionEvent, Vehicle } from '../types'
 import { supabaseAuth } from './supabase-auth'
 
 export interface FleetWorkspacePayload {
@@ -101,6 +101,7 @@ export const fleetApi = {
 		})
 	},
 	getReceiptUrl: (transactionId: string) => request<{ url: string; expiresIn: number }>(`/transactions/${transactionId}/receipt`),
+	getTransactionEvents: (transactionId: string) => request<TransactionEvent[]>(`/transactions/${transactionId}/events`),
 	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend'>) =>
 		request<Driver>('/drivers', {
 			method: 'POST',

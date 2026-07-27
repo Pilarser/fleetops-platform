@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { SessionUser, Transaction } from '../src/types'
+import type { SessionUser, Transaction, TransactionEvent } from '../src/types'
 import { createFleetServer } from './app'
 import { createFleetStore } from './storage'
 
@@ -291,6 +291,14 @@ describe('fleet API', () => {
 		assert.ok(reviewed?.reviewedAt)
 		assert.equal(reviewed?.rejectionReason, null)
 
+		const historyResponse = await fetch(`${baseUrl}/api/transactions/${created.id}/events`, {
+			headers: { authorization: `Bearer ${token}` },
+		})
+		const history = (await historyResponse.json()) as TransactionEvent[]
+		assert.equal(historyResponse.status, 200)
+		assert.deepEqual(history.map((event) => event.type), ['approved', 'submitted'])
+		assert.equal(history[0]?.actorId, 'user-admin')
+
 		const invalidRejectionResponse = await fetch(`${baseUrl}/api/transactions/${created.id}`, {
 			method: 'PATCH',
 			headers: {
@@ -449,6 +457,19 @@ describe('fleet API', () => {
 			body: JSON.stringify({ date: '2026-07-21', service: driverWorkspace.services[0].id, provider: 'Too late', amount: 1, vat: 0, expenseType: 'business' }),
 		})
 		assert.equal(editWithdrawn.status, 409)
+
+		const historyResponse = await fetch(`${baseUrl}/api/transactions/${created.id}/events`, {
+			headers: { authorization: `Bearer ${token}` },
+		})
+		const history = (await historyResponse.json()) as TransactionEvent[]
+		assert.equal(historyResponse.status, 200)
+		assert.deepEqual(history.map((event) => event.type), ['withdrawn', 'edited', 'submitted'])
+		assert.deepEqual(Object.keys(history[1]?.details.changes as Record<string, unknown>).sort(), ['amount', 'expenseType', 'provider', 'vat'])
+
+		const forbiddenHistory = await fetch(`${baseUrl}/api/transactions/${otherDriverTransaction.id}/events`, {
+			headers: { authorization: `Bearer ${token}` },
+		})
+		assert.equal(forbiddenHistory.status, 404)
 	})
 
 	it('blocks driver role from admin workspace access', async () => {

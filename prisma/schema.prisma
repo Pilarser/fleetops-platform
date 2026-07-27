@@ -13,30 +13,31 @@ datasource db {
 }
 
 model Company {
-  id        String    @id
-  name      String
-  users     User[]
-  drivers   Driver[]
-  vehicles  Vehicle[]
-  services  MobilityService[]
-  providers ProviderLocation[]
-  transactions FleetTransaction[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                String             @id
+  name              String
+  users             User[]
+  drivers           Driver[]
+  vehicles          Vehicle[]
+  services          MobilityService[]
+  providers         ProviderLocation[]
+  transactions      FleetTransaction[]
+  transactionEvents TransactionEvent[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model User {
-  id        String   @id
-  authUserId String? @unique
-  companyId String
-  name      String
-  email     String   @unique
-  role      String
-  status    String   @default("active")
-  company   Company  @relation(fields: [companyId], references: [id])
-  driver    Driver?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id
+  authUserId String?  @unique
+  companyId  String
+  name       String
+  email      String   @unique
+  role       String
+  status     String   @default("active")
+  company    Company  @relation(fields: [companyId], references: [id])
+  driver     Driver?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Driver {
@@ -105,7 +106,7 @@ model ProviderLocation {
 }
 
 model FleetTransaction {
-  id              String    @id
+  id              String             @id
   companyId       String
   date            String
   driverId        String
@@ -124,7 +125,24 @@ model FleetTransaction {
   receiptName     String?
   receiptMimeType String?
   receiptSize     Int?
-  company         Company   @relation(fields: [companyId], references: [id])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  company         Company            @relation(fields: [companyId], references: [id])
+  events          TransactionEvent[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+}
+
+model TransactionEvent {
+  id            String           @id
+  companyId     String
+  transactionId String
+  type          String
+  actorId       String
+  actorName     String
+  actorRole     String
+  details       Json             @default("{}")
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transaction   FleetTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime         @default(now())
+
+  @@index([companyId, transactionId, createdAt])
 }

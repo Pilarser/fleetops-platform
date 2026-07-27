@@ -93,6 +93,41 @@ type TransactionReview = {
 type TransactionReviewer = {
 	id: string
 	name: string
+	role: string
+}
+
+type TransactionActor = TransactionReviewer
+
+type DbTransactionEvent = {
+	id: string
+	transactionId: string
+	type: string
+	actorId: string
+	actorName: string
+	actorRole: string
+	details: Record<string, unknown> | string
+	createdAt: Date | string
+}
+
+async function appendTransactionEvent(
+	transaction: TransactionSql,
+	companyId: string,
+	transactionId: string,
+	actor: TransactionActor,
+	type: string,
+	details: Record<string, unknown>,
+) {
+	await transaction`
+		insert into "TransactionEvent" (id, "companyId", "transactionId", type, "actorId", "actorName", "actorRole", details, "createdAt")
+		values (${`event-${crypto.randomUUID()}`}, ${companyId}, ${transactionId}, ${type}, ${actor.id}, ${actor.name}, ${actor.role}, ${transaction.json(details)}, now())
+	`
+}
+
+function transactionChanges(before: DbTransaction, after: DbTransaction) {
+	const fields = ['date', 'service', 'provider', 'amount', 'vat', 'expenseType'] as const
+	return Object.fromEntries(fields
+		.filter((field) => String(before[field]) !== String(after[field]))
+		.map((field) => [field, { from: before[field], to: after[field] }]))
 }
 
 export function mapDriver(driver: DbDriver) {
@@ -219,9 +254,9 @@ async function ensureEnabledService(transaction: TransactionSql, companyId: stri
 	if (!enabledService) throw new ApiError(400, 'Mobility service is not enabled')
 }
 
-export async function createDriverTransaction(companyId: string, userId: string, payload: DriverTransactionPayload) {
+export async function createDriverTransaction(companyId: string, actor: TransactionActor, payload: DriverTransactionPayload) {
 	return sql.begin(async (transaction) => {
-		const context = await driverSubmissionContext(transaction, companyId, userId)
+		const context = await driverSubmissionContext(transaction, companyId, actor.id)
 		await ensureEnabledService(transaction, companyId, payload.service)
 		const id = `transaction-${crypto.randomUUID()}`
 		const [created] = await transaction<DbTransaction[]>`
@@ -229,36 +264,58 @@ export async function createDriverTransaction(companyId: string, userId: string,
 			values (${id}, ${companyId}, ${payload.date}, ${context.driverId}, ${context.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, 'pending', ${payload.expenseType}, now(), now())
 			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 		`
+		await appendTransactionEvent(transaction, companyId, id, actor, 'submitted', {
+			summary: 'Expense submitted for review.',
+			source: 'driver',
+		})
 		return mapTransaction(created)
 	})
 }
 
-export async function updateDriverTransaction(companyId: string, userId: string, transactionId: string, payload: DriverTransactionPayload) {
+export async function updateDriverTransaction(companyId: string, actor: TransactionActor, transactionId: string, payload: DriverTransactionPayload) {
 	return sql.begin(async (transaction) => {
 		await ensureEnabledService(transaction, companyId, payload.service)
+		const [current] = await transaction<DbTransaction[]>`
+			select ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
+			from "FleetTransaction" ft
+			join "Driver" d on d.id = ft."driverId" and d."companyId" = ft."companyId"
+			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending' and d."userId" = ${actor.id}
+			limit 1
+		`
+		if (!current) throw new ApiError(409, 'Only your pending transactions can be edited')
 		const [updated] = await transaction<DbTransaction[]>`
 			update "FleetTransaction" ft
 			set date = ${payload.date}, service = ${payload.service}, provider = ${payload.provider}, amount = ${payload.amount}, vat = ${payload.vat}, "expenseType" = ${payload.expenseType}, "updatedAt" = now()
 			from "Driver" d
 			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
-				and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${userId}
+				and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${actor.id}
 			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
 		`
 		if (!updated) throw new ApiError(409, 'Only your pending transactions can be edited')
+		const changes = transactionChanges(current, updated)
+		if (Object.keys(changes).length > 0) {
+			await appendTransactionEvent(transaction, companyId, transactionId, actor, 'edited', {
+				summary: `${Object.keys(changes).length} expense field${Object.keys(changes).length === 1 ? '' : 's'} updated.`,
+				changes,
+			})
+		}
 		return mapTransaction(updated)
 	})
 }
 
-export async function withdrawDriverTransaction(companyId: string, userId: string, transactionId: string) {
-	const [updated] = await sql<DbTransaction[]>`
-		update "FleetTransaction" ft set status = 'withdrawn', "updatedAt" = now()
-		from "Driver" d
-		where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
-			and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${userId}
-		returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
-	`
-	if (!updated) throw new ApiError(409, 'Only your pending transactions can be withdrawn')
-	return mapTransaction(updated)
+export async function withdrawDriverTransaction(companyId: string, actor: TransactionActor, transactionId: string) {
+	return sql.begin(async (transaction) => {
+		const [updated] = await transaction<DbTransaction[]>`
+			update "FleetTransaction" ft set status = 'withdrawn', "updatedAt" = now()
+			from "Driver" d
+			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
+				and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${actor.id}
+			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
+		`
+		if (!updated) throw new ApiError(409, 'Only your pending transactions can be withdrawn')
+		await appendTransactionEvent(transaction, companyId, transactionId, actor, 'withdrawn', { summary: 'Expense withdrawn by driver.' })
+		return mapTransaction(updated)
+	})
 }
 
 export async function getTransactionReceiptAccess(
@@ -284,21 +341,33 @@ export async function getTransactionReceiptAccess(
 
 export async function confirmTransactionReceipt(
 	companyId: string,
-	userId: string,
+	actor: TransactionActor,
 	transactionId: string,
 	metadata: { path: string; fileName: string; contentType: string; size: number },
 ) {
-	const [updated] = await sql<DbTransaction[]>`
-		update "FleetTransaction" ft
-		set "receiptPath" = ${metadata.path}, "receiptName" = ${metadata.fileName},
-			"receiptMimeType" = ${metadata.contentType}, "receiptSize" = ${metadata.size}, "updatedAt" = now()
-		from "Driver" d
-		where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
-			and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${userId}
-		returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
-	`
-	if (!updated) throw new ApiError(409, 'Receipts can only be changed on your pending expenses')
-	return mapTransaction(updated)
+	return sql.begin(async (transaction) => {
+		const [current] = await transaction<{ receiptPath: string | null }[]>`
+			select ft."receiptPath" from "FleetTransaction" ft
+			join "Driver" d on d.id = ft."driverId" and d."companyId" = ft."companyId"
+			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending' and d."userId" = ${actor.id}
+		`
+		const [updated] = await transaction<DbTransaction[]>`
+			update "FleetTransaction" ft
+			set "receiptPath" = ${metadata.path}, "receiptName" = ${metadata.fileName},
+				"receiptMimeType" = ${metadata.contentType}, "receiptSize" = ${metadata.size}, "updatedAt" = now()
+			from "Driver" d
+			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
+				and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${actor.id}
+			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
+		`
+		if (!updated) throw new ApiError(409, 'Receipts can only be changed on your pending expenses')
+		const replaced = Boolean(current?.receiptPath)
+		await appendTransactionEvent(transaction, companyId, transactionId, actor, replaced ? 'receipt_replaced' : 'receipt_attached', {
+			summary: replaced ? 'Receipt replaced.' : 'Receipt attached.',
+			fileName: metadata.fileName,
+		})
+		return mapTransaction(updated)
+	})
 }
 
 export async function getTeam(companyId: string) {
@@ -439,7 +508,7 @@ export async function toggleService(companyId: string, serviceId: string) {
 	return { ...service, monthlyLimit: Number(service.monthlyLimit) }
 }
 
-export async function createTransaction(companyId: string, payload: TransactionPayload) {
+export async function createTransaction(companyId: string, actor: TransactionActor, payload: TransactionPayload) {
 	return sql.begin(async (transaction) => {
 		await ensureDriverBelongsToCompany(transaction, payload.driverId, companyId)
 		await ensureVehicleBelongsToCompany(transaction, payload.vehicleId, companyId)
@@ -461,6 +530,10 @@ export async function createTransaction(companyId: string, payload: TransactionP
 			values (${id}, ${companyId}, ${payload.date}, ${payload.driverId}, ${payload.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, 'pending', ${payload.expenseType}, now(), now())
 			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 		`
+		await appendTransactionEvent(transaction, companyId, id, actor, 'submitted', {
+			summary: 'Transaction created in the operations portal.',
+			source: 'backoffice',
+		})
 		return mapTransaction(created)
 	})
 }
@@ -471,20 +544,40 @@ export async function updateTransaction(
 	payload: TransactionReview,
 	reviewer: TransactionReviewer,
 ) {
-	const [updated] = await sql<DbTransaction[]>`
-		update "FleetTransaction"
-		set status = ${payload.status},
-			"expenseType" = ${payload.expenseType},
-			"reviewedById" = ${reviewer.id},
-			"reviewedByName" = ${reviewer.name},
-			"reviewedAt" = now(),
-			"rejectionReason" = ${payload.status === 'rejected' ? payload.rejectionReason ?? null : null},
-			"updatedAt" = now()
-		where id = ${transactionId} and "companyId" = ${companyId} and status = 'pending'
-		returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
+	return sql.begin(async (transaction) => {
+		const [updated] = await transaction<DbTransaction[]>`
+			update "FleetTransaction"
+			set status = ${payload.status},
+				"expenseType" = ${payload.expenseType},
+				"reviewedById" = ${reviewer.id},
+				"reviewedByName" = ${reviewer.name},
+				"reviewedAt" = now(),
+				"rejectionReason" = ${payload.status === 'rejected' ? payload.rejectionReason ?? null : null},
+				"updatedAt" = now()
+			where id = ${transactionId} and "companyId" = ${companyId} and status = 'pending'
+			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
+		`
+		if (!updated) throw new ApiError(409, 'Only pending transactions can be reviewed')
+		await appendTransactionEvent(transaction, companyId, transactionId, reviewer, payload.status, {
+			summary: payload.status === 'approved' ? 'Expense approved.' : 'Expense rejected.',
+			expenseType: payload.expenseType,
+			...(payload.rejectionReason ? { rejectionReason: payload.rejectionReason } : {}),
+		})
+		return mapTransaction(updated)
+	})
+}
+
+export async function getTransactionEvents(companyId: string, userId: string, role: string, transactionId: string) {
+	await getTransactionReceiptAccess(companyId, userId, role, transactionId, false)
+	const events = await sql<DbTransactionEvent[]>`
+		select id, "transactionId", type, "actorId", "actorName", "actorRole", details, "createdAt"
+		from "TransactionEvent"
+		where "companyId" = ${companyId} and "transactionId" = ${transactionId}
+		order by "createdAt" desc, id desc
 	`
-	if (!updated) {
-		throw new ApiError(409, 'Only pending transactions can be reviewed')
-	}
-	return mapTransaction(updated)
+	return events.map((event) => ({
+		...event,
+		details: typeof event.details === 'string' ? JSON.parse(event.details) : event.details,
+		createdAt: event.createdAt instanceof Date ? event.createdAt.toISOString() : event.createdAt,
+	}))
 }

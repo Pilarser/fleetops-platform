@@ -2,13 +2,14 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { providers, transactions } from '../src/data/mock-data'
 import { drivers as seedDrivers, services as seedServices, vehicles as seedVehicles } from '../src/data/mock-data'
-import type { Driver, DriverWorkspace, MobilityService, ProviderLocation, Transaction, Vehicle } from '../src/types'
+import type { Driver, DriverWorkspace, MobilityService, ProviderLocation, Transaction, TransactionEvent, Vehicle } from '../src/types'
 
 export interface FleetDatabase {
 	drivers: Driver[]
 	providers: ProviderLocation[]
 	services: MobilityService[]
 	transactions: Transaction[]
+	transactionEvents: TransactionEvent[]
 	vehicles: Vehicle[]
 }
 
@@ -16,6 +17,8 @@ export interface FleetStore {
 	path: string
 	getWorkspace: () => Promise<FleetDatabase>
 	getDriverWorkspace: (userId: string) => Promise<DriverWorkspace | undefined>
+	getTransactionEvents: (transactionId: string) => Promise<TransactionEvent[]>
+	appendTransactionEvent: (event: TransactionEvent) => Promise<TransactionEvent>
 	createDriver: (driver: Driver) => Promise<Driver>
 	createTransaction: (transaction: Transaction) => Promise<Transaction>
 	createVehicle: (vehicle: Vehicle) => Promise<Vehicle>
@@ -31,6 +34,7 @@ function seedDatabase(): FleetDatabase {
 		providers: structuredClone(providers),
 		services: structuredClone(seedServices),
 		transactions: structuredClone(transactions),
+		transactionEvents: [],
 		vehicles: structuredClone(seedVehicles),
 	}
 }
@@ -43,7 +47,8 @@ function writeDatabase(databasePath: string, database: FleetDatabase) {
 function readDatabase(databasePath: string) {
 	try {
 		const raw = readFileSync(databasePath, 'utf8')
-		return JSON.parse(raw) as FleetDatabase
+		const database = JSON.parse(raw) as FleetDatabase
+		return { ...database, transactionEvents: database.transactionEvents ?? [] }
 	} catch {
 		const database = seedDatabase()
 		writeDatabase(databasePath, database)
@@ -106,6 +111,14 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 				services: database.services.filter((service) => service.enabled),
 				transactions: database.transactions.filter((transaction) => transaction.driverId === driver.id),
 			}
+		},
+		getTransactionEvents: async (transactionId: string) => database.transactionEvents
+			.filter((event) => event.transactionId === transactionId)
+			.sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+		appendTransactionEvent: async (event: TransactionEvent) => {
+			database = { ...database, transactionEvents: [event, ...database.transactionEvents] }
+			writeDatabase(path, database)
+			return event
 		},
 		createDriver: async (driver: Driver) => {
 			database = {

@@ -5,6 +5,8 @@ import type {
 	MobilityService,
 	ServiceType,
 	Transaction,
+	TransactionEvent,
+	TransactionEventType,
 	TransactionStatus,
 	Vehicle,
 	VehicleStatus,
@@ -14,6 +16,7 @@ import type {
 	FleetTransaction as PrismaFleetTransaction,
 	MobilityService as PrismaMobilityService,
 	ProviderLocation as PrismaProviderLocation,
+	TransactionEvent as PrismaTransactionEvent,
 	Vehicle as PrismaVehicle,
 } from '../src/generated/prisma/client'
 import { prisma } from './prisma'
@@ -61,6 +64,11 @@ function normalizeTransactionStatus(status: string): TransactionStatus {
 		return status
 	}
 	return 'approved'
+}
+
+function normalizeTransactionEventType(type: string): TransactionEventType {
+	const types: TransactionEventType[] = ['submitted', 'edited', 'receipt_attached', 'receipt_replaced', 'approved', 'rejected', 'withdrawn']
+	return types.includes(type as TransactionEventType) ? type as TransactionEventType : 'edited'
 }
 
 function normalizeExpenseType(expenseType: string): Transaction['expenseType'] {
@@ -145,6 +153,21 @@ function mapTransaction(transaction: PrismaFleetTransaction): Transaction {
 	}
 }
 
+function mapTransactionEvent(event: PrismaTransactionEvent): TransactionEvent {
+	return {
+		id: event.id,
+		transactionId: event.transactionId,
+		type: normalizeTransactionEventType(event.type),
+		actorId: event.actorId,
+		actorName: event.actorName,
+		actorRole: event.actorRole,
+		details: event.details && typeof event.details === 'object' && !Array.isArray(event.details)
+			? event.details as Record<string, unknown>
+			: {},
+		createdAt: event.createdAt.toISOString(),
+	}
+}
+
 async function ensureCompany() {
 	await prisma.company.upsert({
 		where: { id: companyId },
@@ -160,11 +183,12 @@ export function createPrismaFleetStore(): FleetStore {
 	return {
 		path: process.env.DATABASE_URL ?? 'postgresql://fleetops:fleetops@localhost:55433/fleetops',
 		getWorkspace: async () => {
-			const [drivers, providers, services, transactions, vehicles] = await Promise.all([
+			const [drivers, providers, services, transactions, transactionEvents, vehicles] = await Promise.all([
 				prisma.driver.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),
 				prisma.providerLocation.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),
 				prisma.mobilityService.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),
 				prisma.fleetTransaction.findMany({ orderBy: { date: 'desc' }, where: { companyId } }),
+				prisma.transactionEvent.findMany({ orderBy: { createdAt: 'desc' }, where: { companyId } }),
 				prisma.vehicle.findMany({ orderBy: { plate: 'asc' }, where: { companyId } }),
 			])
 
@@ -173,9 +197,25 @@ export function createPrismaFleetStore(): FleetStore {
 				providers: providers.map(mapProvider),
 				services: services.map(mapService),
 				transactions: transactions.map(mapTransaction),
+				transactionEvents: transactionEvents.map(mapTransactionEvent),
 				vehicles: vehicles.map((vehicle) => mapVehicle(vehicle, drivers)),
 			}
 		},
+		getTransactionEvents: async (transactionId) => {
+			const events = await prisma.transactionEvent.findMany({
+				orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+				where: { companyId, transactionId },
+			})
+			return events.map(mapTransactionEvent)
+		},
+		appendTransactionEvent: async (event) => mapTransactionEvent(await prisma.transactionEvent.create({
+			data: {
+				...event,
+				companyId,
+				createdAt: new Date(event.createdAt),
+				details: event.details as never,
+			},
+		})),
 		getDriverWorkspace: async (userId) => {
 			const driver = await prisma.driver.findFirst({ where: { companyId, userId } })
 			if (!driver) return undefined

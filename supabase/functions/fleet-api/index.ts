@@ -18,6 +18,7 @@ import {
 	getWorkspace,
 	getDriverWorkspace,
 	getTeam,
+	getTransactionEvents,
 	toggleService,
 	updateDriver,
 	updateDriverTransaction,
@@ -125,13 +126,13 @@ Deno.serve(async (request) => {
 		if (request.method === 'POST' && path === '/driver/transactions') {
 			requireRole(session, ['driver'])
 			const payload = driverTransactionPayloadSchema.parse(await readJson(request))
-			return json(await createDriverTransaction(session.companyId, session.id, payload), 201)
+			return json(await createDriverTransaction(session.companyId, session, payload), 201)
 		}
 
 		if (request.method === 'POST' && path.startsWith('/driver/transactions/') && path.endsWith('/withdraw')) {
 			requireRole(session, ['driver'])
 			const transactionId = decodeURIComponent(path.slice('/driver/transactions/'.length, -'/withdraw'.length))
-			return json(await withdrawDriverTransaction(session.companyId, session.id, transactionId))
+			return json(await withdrawDriverTransaction(session.companyId, session, transactionId))
 		}
 
 		if (request.method === 'POST' && path.startsWith('/driver/transactions/') && path.endsWith('/receipt-upload')) {
@@ -154,11 +155,17 @@ Deno.serve(async (request) => {
 			return json(await createReceiptDownload(session, transactionId))
 		}
 
+		if (request.method === 'GET' && path.startsWith('/transactions/') && path.endsWith('/events')) {
+			requireRole(session, ['fleet_admin', 'manager', 'finance', 'driver'])
+			const transactionId = decodeURIComponent(path.slice('/transactions/'.length, -'/events'.length))
+			return json(await getTransactionEvents(session.companyId, session.id, session.role, transactionId))
+		}
+
 		if (request.method === 'PATCH' && path.startsWith('/driver/transactions/')) {
 			requireRole(session, ['driver'])
 			const transactionId = decodeURIComponent(path.slice('/driver/transactions/'.length))
 			const payload = driverTransactionPayloadSchema.parse(await readJson(request))
-			return json(await updateDriverTransaction(session.companyId, session.id, transactionId, payload))
+			return json(await updateDriverTransaction(session.companyId, session, transactionId, payload))
 		}
 
 		if (request.method === 'GET' && path === '/workspace') {
@@ -209,7 +216,7 @@ Deno.serve(async (request) => {
 		if (request.method === 'POST' && path === '/transactions') {
 			requireRole(session, [...transactionCreateRoles])
 			const payload = transactionPayloadSchema.parse(await readJson(request))
-			return json(await createTransaction(session.companyId, payload), 201)
+			return json(await createTransaction(session.companyId, session, payload), 201)
 		}
 
 		if (request.method === 'PATCH' && path.startsWith('/transactions/')) {

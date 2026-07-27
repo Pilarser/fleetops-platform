@@ -921,6 +921,89 @@ textarea.field {
 	text-align: right;
 }
 
+.audit-section {
+	margin-top: 8px;
+	padding-top: 20px;
+	border-top: 1px solid #d9e1e8;
+}
+
+.audit-heading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 16px;
+}
+
+.audit-heading h3 {
+	margin: 0;
+	font-size: 15px;
+}
+
+.audit-state {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	color: #667085;
+	font-size: 13px;
+}
+
+.audit-timeline {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.audit-timeline li {
+	position: relative;
+	display: grid;
+	grid-template-columns: 30px minmax(0, 1fr);
+	gap: 10px;
+	padding-bottom: 20px;
+}
+
+.audit-timeline li:not(:last-child)::before {
+	content: '';
+	position: absolute;
+	left: 14px;
+	top: 30px;
+	bottom: 4px;
+	width: 1px;
+	background: #d9e1e8;
+}
+
+.audit-icon {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background: #e8f4f0;
+	color: #123b3f;
+}
+
+.audit-timeline strong,
+.audit-timeline p,
+.audit-timeline small {
+	display: block;
+}
+
+.audit-timeline strong {
+	font-size: 13px;
+}
+
+.audit-timeline p {
+	margin: 3px 0 5px;
+	color: #17202a;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.audit-timeline small {
+	color: #667085;
+	font-size: 12px;
+}
+
 .service-list {
 	display: grid;
 	padding: 0 18px 18px;

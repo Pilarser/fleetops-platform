@@ -17,6 +17,8 @@ import {
 } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
 import { fleetApi } from '../services/fleet-api'
+import { TransactionTimeline } from '../components/transaction-timeline'
+import { useTransactionEvents } from '../hooks/use-transaction-events'
 import { useAuth } from '../state/auth'
 import { useFleetWorkspace } from '../state/fleet-workspace'
 import type { ServiceType, Transaction, TransactionStatus } from '../types'
@@ -66,6 +68,10 @@ export function TransactionsPage() {
 	const [isReviewing, setIsReviewing] = useState(false)
 	const [isRejecting, setIsRejecting] = useState(false)
 	const [isOpeningReceipt, setIsOpeningReceipt] = useState(false)
+	const transactionHistory = useTransactionEvents(
+		selectedTransaction?.id,
+		`${selectedTransaction?.status ?? ''}:${selectedTransaction?.reviewedAt ?? ''}:${selectedTransaction?.receiptName ?? ''}`,
+	)
 
 	const canCreate = Boolean(user && ['fleet_admin', 'manager', 'finance', 'support'].includes(user.role))
 	const canReview = Boolean(user && ['fleet_admin', 'manager', 'finance'].includes(user.role))
@@ -398,6 +404,7 @@ export function TransactionsPage() {
 						) : (
 							<Detail label="Expense type" value={selectedTransaction.expenseType} />
 						)}
+						<TransactionTimeline {...transactionHistory} />
 					</div>
 				</Drawer>
 			) : null}

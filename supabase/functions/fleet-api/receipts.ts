@@ -61,7 +61,7 @@ export async function confirmReceipt(session: AuthenticatedProfile, transactionI
 		throw new ApiError(400, 'Uploaded receipt does not match the selected file')
 	}
 
-	const updated = await confirmTransactionReceipt(session.companyId, session.id, transactionId, metadata)
+	const updated = await confirmTransactionReceipt(session.companyId, session, transactionId, metadata)
 	if (access.receiptPath && access.receiptPath !== metadata.path) {
 		await client.storage.from(receiptBucket).remove([access.receiptPath])
 	}
