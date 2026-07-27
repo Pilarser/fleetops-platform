@@ -24,6 +24,35 @@ const testUsers: SessionUser[] = [
 		role: 'driver',
 		companyName: 'FleetOps Demo',
 	},
+	{
+		id: 'user-finance',
+		name: 'Finance User',
+		email: 'finance@example.com',
+		role: 'finance',
+		companyName: 'FleetOps Demo',
+	},
+	{
+		id: 'user-manager',
+		name: 'Fleet Manager',
+		email: 'manager@example.com',
+		role: 'manager',
+		companyName: 'FleetOps Demo',
+	},
+	{
+		id: 'user-support',
+		name: 'Support User',
+		email: 'support@example.com',
+		role: 'support',
+		companyName: 'FleetOps Demo',
+	},
+	{
+		id: 'user-invited',
+		name: 'Invited Driver',
+		email: 'invited@example.com',
+		role: 'driver',
+		companyName: 'FleetOps Demo',
+		membershipStatus: 'invited',
+	},
 ]
 const server = createFleetServer(store, {
 	findUser: async (email, password) => {
@@ -396,6 +425,74 @@ describe('fleet API', () => {
 		})
 
 		assert.equal(response.status, 403)
+	})
+
+	it('keeps support access read-only', async () => {
+		const token = await login('support@example.com')
+		const workspaceResponse = await fetch(`${baseUrl}/api/workspace`, {
+			headers: { authorization: `Bearer ${token}` },
+		})
+		assert.equal(workspaceResponse.status, 200)
+
+		const mutations = [
+			{ method: 'POST', path: '/api/drivers' },
+			{ method: 'POST', path: '/api/vehicles' },
+			{ method: 'PATCH', path: '/api/services/fuel' },
+			{ method: 'POST', path: '/api/transactions' },
+		]
+		for (const mutation of mutations) {
+			const response = await fetch(`${baseUrl}${mutation.path}`, {
+				method: mutation.method,
+				headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+				body: mutation.method === 'PATCH' && mutation.path.includes('/services/') ? undefined : JSON.stringify({}),
+			})
+			assert.equal(response.status, 403, `${mutation.method} ${mutation.path}`)
+		}
+	})
+
+	it('allows finance to work with transactions but not fleet setup', async () => {
+		const token = await login('finance@example.com')
+		const workspace = await getWorkspace(token)
+		const response = await fetch(`${baseUrl}/api/transactions`, {
+			method: 'POST',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({
+				date: '2026-07-22',
+				driverId: workspace.drivers[0]?.id,
+				vehicleId: workspace.vehicles[0]?.id,
+				service: workspace.services.find((service) => service.enabled)?.id,
+				provider: 'Finance Permission Test',
+				amount: 25,
+				vat: 5,
+				expenseType: 'business',
+			}),
+		})
+		assert.equal(response.status, 201)
+
+		const fleetMutation = await fetch(`${baseUrl}/api/drivers`, {
+			method: 'POST',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({}),
+		})
+		assert.equal(fleetMutation.status, 403)
+	})
+
+	it('blocks invited accounts from data routes until activation', async () => {
+		const token = await login('invited@example.com')
+		const meResponse = await fetch(`${baseUrl}/api/auth/me`, {
+			headers: { authorization: `Bearer ${token}` },
+		})
+		assert.equal(meResponse.status, 200)
+
+		const notificationResponse = await fetch(`${baseUrl}/api/notifications`, {
+			headers: { authorization: `Bearer ${token}` },
+		})
+		assert.equal(notificationResponse.status, 403)
+
+		const driverWorkspaceResponse = await fetch(`${baseUrl}/api/driver/workspace`, {
+			headers: { authorization: `Bearer ${token}` },
+		})
+		assert.equal(driverWorkspaceResponse.status, 403)
 	})
 
 	it('lets drivers submit, edit, and withdraw only their own pending expenses', async () => {

@@ -1,17 +1,20 @@
 import { Badge, Button, Card, PageHeader } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
 import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useAuth } from '../state/auth'
+import { canManageFleet } from '../security/permissions'
 
 export function ServicesPage() {
+	const { user } = useAuth()
 	const { services, toggleService } = useFleetWorkspace()
+	const canManage = canManageFleet(user?.role)
 
 	return (
 		<>
 			<PageHeader
 				title="Service catalog"
 				description="Enable mobility services per company and configure approval rules before adding real providers."
-				actions={<Button type="button">Configure policy</Button>}
-			/>
+				/>
 			<div className="catalog-grid">
 				{services.map((service) => (
 					<Card className="service-card" key={service.id}>
@@ -32,7 +35,7 @@ export function ServicesPage() {
 								<strong>{service.requiresApproval ? 'Required' : 'Automatic'}</strong>
 							</div>
 						</div>
-						<div className="service-card-actions">
+						{canManage ? <div className="service-card-actions">
 							<Button
 								type="button"
 								variant={service.enabled ? 'secondary' : 'primary'}
@@ -40,7 +43,7 @@ export function ServicesPage() {
 							>
 								{service.enabled ? 'Disable service' : 'Enable service'}
 							</Button>
-						</div>
+						</div> : null}
 					</Card>
 				))}
 			</div>

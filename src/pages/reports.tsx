@@ -13,10 +13,10 @@ import {
 } from '../data/reporting'
 import { useAuth } from '../state/auth'
 import { useFleetWorkspace } from '../state/fleet-workspace'
+import { canViewReports } from '../security/permissions'
 
 type PeriodMode = 'month' | 'custom'
 
-const reportRoles = ['fleet_admin', 'manager', 'finance']
 const groupLabels: Record<ReportGroup, string> = {
 	service: 'Service',
 	driver: 'Driver',
@@ -68,7 +68,7 @@ export function ReportsPage() {
 		vehicles,
 	}), [drivers, groupBy, reportTransactions, services, vehicles])
 
-	if (!user || !reportRoles.includes(user.role)) {
+	if (!canViewReports(user?.role)) {
 		return (
 			<>
 				<PageHeader title="Reports" description="Financial reporting is available to fleet, management, and finance roles." />

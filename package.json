@@ -15,9 +15,11 @@
 		"db:studio": "prisma studio",
 		"db:up": "docker compose up -d",
 		"dev": "vite",
+		"e2e:api": "tsx server/e2e-index.ts",
 		"build": "tsc -b && tsc -p tsconfig.server.json && vite build",
 		"preview": "vite preview",
 		"test:api": "node --import tsx --test server/*.test.ts",
+		"test:e2e": "playwright test",
 		"typecheck": "tsc -b && tsc -p tsconfig.server.json"
 	},
 	"dependencies": {
@@ -36,6 +38,7 @@
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
+		"@playwright/test": "^1.62.0",
 		"@types/node": "^25.8.0",
 		"@types/pg": "^8.20.0",
 		"@types/react": "^19.2.14",

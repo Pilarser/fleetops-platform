@@ -15,8 +15,9 @@ import {
 import { createFleetStore, type FleetStore } from './storage'
 
 const workspaceRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
-const operationsRoles = ['fleet_admin', 'manager', 'support'] as const
-const transactionCreateRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
+const authenticatedRoles = ['fleet_admin', 'manager', 'finance', 'driver', 'support'] as const
+const operationsRoles = ['fleet_admin', 'manager'] as const
+const transactionCreateRoles = ['fleet_admin', 'manager', 'finance'] as const
 const transactionReviewRoles = ['fleet_admin', 'manager', 'finance'] as const
 
 function nextId(prefix: string) {
@@ -100,14 +101,14 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 			}
 
 			if (method === 'GET' && url.pathname === '/api/notifications') {
-				const user = requireUser(request, response)
+				const user = requireRole(request, response, [...authenticatedRoles])
 				if (!user) return
 				sendJson(response, 200, await store.getNotifications(user.id))
 				return
 			}
 
 			if (method === 'POST' && url.pathname === '/api/notifications/read-all') {
-				const user = requireUser(request, response)
+				const user = requireRole(request, response, [...authenticatedRoles])
 				if (!user) return
 				await store.markAllNotificationsRead(user.id)
 				sendJson(response, 200, { ok: true })
@@ -115,7 +116,7 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 			}
 
 			if (method === 'POST' && url.pathname.startsWith('/api/notifications/') && url.pathname.endsWith('/read')) {
-				const user = requireUser(request, response)
+				const user = requireRole(request, response, [...authenticatedRoles])
 				if (!user) return
 				const id = decodeURIComponent(url.pathname.slice('/api/notifications/'.length, -'/read'.length))
 				const updated = await store.markNotificationRead(user.id, id)

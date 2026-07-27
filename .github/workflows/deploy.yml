@@ -39,12 +39,21 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
+      - name: Run API and security tests
+        run: pnpm test:api
+
       - name: Build
         run: pnpm build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run critical workflow
+        run: pnpm test:e2e
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

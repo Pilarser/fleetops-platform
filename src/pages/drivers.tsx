@@ -9,6 +9,7 @@ import { hasSupabaseAuth } from '../services/supabase-auth'
 import { fleetApi } from '../services/fleet-api'
 import type { AccountLifecycleAction, Driver } from '../types'
 import { getVehiclePlate, statusTone } from './helpers'
+import { canManageFleet } from '../security/permissions'
 
 type DriverFormState = Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend' | 'accountStatus'>
 
@@ -23,10 +24,11 @@ const emptyDriverForm: DriverFormState = {
 export function DriversPage() {
 	const { user } = useAuth()
 	const { createDriver, drivers, inviteDriver, reloadWorkspace, updateDriver, vehicles } = useFleetWorkspace()
-	const supportsInvitations = hasSupabaseAuth() && (user?.role === 'fleet_admin' || user?.role === 'manager')
+	const canManage = canManageFleet(user?.role)
+	const supportsInvitations = hasSupabaseAuth() && canManage
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [query, setQuery] = useState('')
-	const [isCreating, setIsCreating] = useState(searchParams.get('create') === '1')
+	const [isCreating, setIsCreating] = useState(canManage && searchParams.get('create') === '1')
 	const [editingDriver, setEditingDriver] = useState<Driver | null>(null)
 	const [invitingDriverId, setInvitingDriverId] = useState<string | null>(null)
 	const [pageError, setPageError] = useState<string | null>(null)
@@ -89,11 +91,11 @@ export function DriversPage() {
 			<PageHeader
 				title="Drivers"
 				description="Manage driver access, vehicle assignment, cost centers, and personal expense attribution."
-				actions={
+				actions={canManage ? (
 					<Button type="button" onClick={() => setIsCreating(true)}>
 						<Plus size={16} /> Add driver
 					</Button>
-				}
+				) : null}
 			/>
 			{pageError ? <p className="page-error" role="alert">{pageError}</p> : null}
 			<Card>
@@ -110,7 +112,7 @@ export function DriversPage() {
 					<Table
 						columns={[
 							'Driver', 'Email', 'Vehicle', 'Cost center', 'Monthly spend', 'Personal', 'Status',
-							...(supportsInvitations ? ['Account'] : []), '',
+							...(supportsInvitations ? ['Account'] : []), ...(canManage ? [''] : []),
 						]}
 						rows={filteredDrivers}
 						renderRow={(driver) => (
@@ -133,7 +135,7 @@ export function DriversPage() {
 										</Badge>
 									</td>
 								) : null}
-								<td>
+								{canManage ? <td>
 									<div className="row-actions">
 										{supportsInvitations && (!driver.accountStatus || driver.accountStatus === 'not_invited') ? (
 											<Button type="button" variant="ghost" disabled={invitingDriverId === driver.id} onClick={() => void handleInvitation(driver.id)}>
@@ -157,7 +159,7 @@ export function DriversPage() {
 										) : null}
 										<Button type="button" variant="ghost" onClick={() => setEditingDriver(driver)}>Edit</Button>
 									</div>
-								</td>
+								</td> : null}
 							</tr>
 						)}
 					/>
@@ -165,12 +167,12 @@ export function DriversPage() {
 					<EmptyState
 						title="No drivers found"
 						detail="Add a driver and assign an available vehicle."
-						action={<Button type="button" onClick={() => setIsCreating(true)}><Plus size={16} /> Add driver</Button>}
+						action={canManage ? <Button type="button" onClick={() => setIsCreating(true)}><Plus size={16} /> Add driver</Button> : undefined}
 					/>
 				)}
 			</Card>
 
-			{isCreating ? (
+			{canManage && isCreating ? (
 				<DriverDialog
 					title="Add driver"
 					vehicles={vehicles}
@@ -186,7 +188,7 @@ export function DriversPage() {
 				/>
 			) : null}
 
-			{editingDriver ? (
+			{canManage && editingDriver ? (
 				<DriverDialog
 					driver={editingDriver}
 					title={`Edit ${editingDriver.name}`}

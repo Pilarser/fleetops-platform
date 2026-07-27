@@ -73,6 +73,10 @@ export function requireRole(request: IncomingMessage, response: ServerResponse, 
 	if (!user) {
 		return undefined
 	}
+	if (user.membershipStatus && user.membershipStatus !== 'active') {
+		sendJson(response, 403, { message: 'Invitation setup is incomplete' })
+		return undefined
+	}
 	if (!roles.includes(user.role)) {
 		sendJson(response, 403, { message: 'Insufficient permissions' })
 		return undefined

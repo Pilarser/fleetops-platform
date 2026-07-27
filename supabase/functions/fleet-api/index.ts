@@ -47,8 +47,9 @@ import {
 import { confirmReceipt, createReceiptDownload, createReceiptUpload } from './receipts.ts'
 
 const workspaceRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
-const operationsRoles = ['fleet_admin', 'manager', 'support'] as const
-const transactionCreateRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
+const authenticatedRoles = ['fleet_admin', 'manager', 'finance', 'driver', 'support'] as const
+const operationsRoles = ['fleet_admin', 'manager'] as const
+const transactionCreateRoles = ['fleet_admin', 'manager', 'finance'] as const
 const transactionReviewRoles = ['fleet_admin', 'manager', 'finance'] as const
 
 function routePath(request: Request) {
@@ -94,14 +95,17 @@ Deno.serve(async (request) => {
 		}
 
 		if (request.method === 'GET' && path === '/notifications') {
+			requireRole(session, [...authenticatedRoles])
 			return json(await getNotifications(session.companyId, session.id))
 		}
 
 		if (request.method === 'POST' && path === '/notifications/read-all') {
+			requireRole(session, [...authenticatedRoles])
 			return json(await markAllNotificationsRead(session.companyId, session.id))
 		}
 
 		if (request.method === 'POST' && path.startsWith('/notifications/') && path.endsWith('/read')) {
+			requireRole(session, [...authenticatedRoles])
 			const notificationId = decodeURIComponent(path.slice('/notifications/'.length, -'/read'.length))
 			return json(await markNotificationRead(session.companyId, session.id, notificationId))
 		}

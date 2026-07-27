@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Car, CreditCard, Download, LoaderCircle, Pencil, Plus, Route, Undo2 } from 'lucide-react'
 import { Badge, Button, Card, Dialog, Drawer, EmptyState, Field, MetricCard, PageHeader, SelectInput, Table, TextInput } from '../components/ui'
 import { formatCurrency, formatNumber } from '../data/formatters'
@@ -34,6 +34,7 @@ export function DriverPortalPage() {
 	const [receiptFile, setReceiptFile] = useState<File | null>(null)
 	const [isOpeningReceipt, setIsOpeningReceipt] = useState(false)
 	const [searchParams, setSearchParams] = useSearchParams()
+	const handledTransactionId = useRef<string | null>(null)
 	const transactionHistory = useTransactionEvents(
 		selectedTransaction?.id,
 		`${selectedTransaction?.status ?? ''}:${selectedTransaction?.receiptName ?? ''}`,
@@ -47,9 +48,16 @@ export function DriverPortalPage() {
 
 	useEffect(() => {
 		const transactionId = searchParams.get('transaction')
-		if (!workspace || !transactionId) return
+		if (!transactionId) {
+			handledTransactionId.current = null
+			return
+		}
+		if (!workspace || handledTransactionId.current === transactionId) return
 		const transaction = workspace.transactions.find((item) => item.id === transactionId)
-		if (transaction) setSelectedTransaction(transaction)
+		if (transaction) {
+			handledTransactionId.current = transactionId
+			setSelectedTransaction(transaction)
+		}
 	}, [searchParams, workspace])
 
 	if (error) return <EmptyState title="Unable to load driver workspace" detail={error} />

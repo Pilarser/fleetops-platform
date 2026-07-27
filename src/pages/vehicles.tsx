@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router-dom'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput, Toolbar } from '../components/ui'
 import { formatCurrency, formatNumber } from '../data/formatters'
 import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useAuth } from '../state/auth'
+import { canManageFleet } from '../security/permissions'
 import type { Vehicle } from '../types'
 import { getDriverName, statusTone } from './helpers'
 
@@ -21,11 +23,13 @@ const emptyVehicleForm: VehicleFormState = {
 }
 
 export function VehiclesPage() {
+	const { user } = useAuth()
 	const { createVehicle, drivers, updateVehicle, vehicles } = useFleetWorkspace()
+	const canManage = canManageFleet(user?.role)
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [query, setQuery] = useState('')
 	const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null)
-	const [isCreating, setIsCreating] = useState(searchParams.get('create') === '1')
+	const [isCreating, setIsCreating] = useState(canManage && searchParams.get('create') === '1')
 
 	function closeCreateDialog() {
 		setIsCreating(false)
@@ -53,11 +57,11 @@ export function VehiclesPage() {
 			<PageHeader
 				title="Vehicles"
 				description="Track assigned drivers, fuel type, cost center, mileage, and monthly mobility spend."
-				actions={
+				actions={canManage ? (
 					<Button type="button" onClick={() => setIsCreating(true)}>
 						<Plus size={16} /> Add vehicle
 					</Button>
-				}
+				) : null}
 			/>
 			<Card>
 				<Toolbar>
@@ -71,7 +75,7 @@ export function VehiclesPage() {
 				</Toolbar>
 				{filteredVehicles.length > 0 ? (
 					<Table
-						columns={['Plate', 'Vehicle', 'Fuel', 'Driver', 'Cost center', 'Mileage', 'Monthly spend', 'Status', '']}
+						columns={['Plate', 'Vehicle', 'Fuel', 'Driver', 'Cost center', 'Mileage', 'Monthly spend', 'Status', ...(canManage ? [''] : [])]}
 						rows={filteredVehicles}
 						renderRow={(vehicle) => (
 							<tr key={vehicle.id}>
@@ -89,11 +93,11 @@ export function VehiclesPage() {
 								<td>
 									<Badge tone={statusTone(vehicle.status)}>{vehicle.status}</Badge>
 								</td>
-								<td>
+								{canManage ? <td>
 									<Button type="button" variant="ghost" onClick={() => setEditingVehicle(vehicle)}>
 										Edit
 									</Button>
-								</td>
+								</td> : null}
 							</tr>
 						)}
 					/>
@@ -101,12 +105,12 @@ export function VehiclesPage() {
 					<EmptyState
 						title="No vehicles found"
 						detail="Add the first vehicle to start this fleet."
-						action={<Button type="button" onClick={() => setIsCreating(true)}><Plus size={16} /> Add vehicle</Button>}
+						action={canManage ? <Button type="button" onClick={() => setIsCreating(true)}><Plus size={16} /> Add vehicle</Button> : undefined}
 					/>
 				)}
 			</Card>
 
-			{isCreating ? (
+			{canManage && isCreating ? (
 				<VehicleDialog
 					drivers={drivers}
 					title="Add vehicle"
@@ -118,7 +122,7 @@ export function VehiclesPage() {
 				/>
 			) : null}
 
-			{editingVehicle ? (
+			{canManage && editingVehicle ? (
 				<VehicleDialog
 					drivers={drivers}
 					title={`Edit ${editingVehicle.plate}`}

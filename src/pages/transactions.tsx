@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Download, LoaderCircle, Plus, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -23,6 +23,7 @@ import { useAuth } from '../state/auth'
 import { useFleetWorkspace } from '../state/fleet-workspace'
 import type { ServiceType, Transaction, TransactionStatus } from '../types'
 import { getDriverName, getServiceLabel, getVehiclePlate, statusTone } from './helpers'
+import { canCreateTransaction, canReviewTransaction, canViewReports } from '../security/permissions'
 
 type StatusFilter = TransactionStatus | 'all'
 type ServiceFilter = ServiceType | 'all'
@@ -54,6 +55,7 @@ export function TransactionsPage() {
 	const { user } = useAuth()
 	const { createTransaction, drivers, services, transactions, updateTransaction, vehicles } = useFleetWorkspace()
 	const [searchParams, setSearchParams] = useSearchParams()
+	const handledTransactionId = useRef<string | null>(null)
 	const [query, setQuery] = useState('')
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
 		const status = searchParams.get('status')
@@ -76,15 +78,24 @@ export function TransactionsPage() {
 		`${selectedTransaction?.status ?? ''}:${selectedTransaction?.reviewedAt ?? ''}:${selectedTransaction?.receiptName ?? ''}`,
 	)
 
-	const canCreate = Boolean(user && ['fleet_admin', 'manager', 'finance', 'support'].includes(user.role))
-	const canReview = Boolean(user && ['fleet_admin', 'manager', 'finance'].includes(user.role))
+	const canCreate = canCreateTransaction(user?.role)
+	const canReview = canReviewTransaction(user?.role)
+	const canExport = canViewReports(user?.role)
+	const canViewTransactionEvidence = user?.role !== 'support'
 	const enabledServices = services.filter((service) => service.enabled)
 
 	useEffect(() => {
 		const transactionId = searchParams.get('transaction')
-		if (!transactionId) return
+		if (!transactionId) {
+			handledTransactionId.current = null
+			return
+		}
+		if (handledTransactionId.current === transactionId) return
 		const transaction = transactions.find((item) => item.id === transactionId)
-		if (transaction) openDetails(transaction)
+		if (transaction) {
+			handledTransactionId.current = transactionId
+			openDetails(transaction)
+		}
 	}, [searchParams, transactions])
 
 	const filteredTransactions = useMemo(() => {
@@ -236,9 +247,9 @@ export function TransactionsPage() {
 				description="A unified ledger for fuel, charging, parking, fines, washes, tolls, urban access, and taxi spend."
 				actions={
 					<>
-						<Button type="button" variant="secondary" onClick={exportCsv} disabled={filteredTransactions.length === 0}>
+						{canExport ? <Button type="button" variant="secondary" onClick={exportCsv} disabled={filteredTransactions.length === 0}>
 							<Download size={16} /> Export CSV
-						</Button>
+						</Button> : null}
 						{canCreate ? (
 							<Button type="button" onClick={openCreateDialog} disabled={enabledServices.length === 0}>
 								<Plus size={16} /> Add transaction
@@ -372,9 +383,9 @@ export function TransactionsPage() {
 						{selectedTransaction.reviewedByName ? <Detail label="Reviewed by" value={selectedTransaction.reviewedByName} /> : null}
 						{selectedTransaction.reviewedAt ? <Detail label="Reviewed at" value={new Date(selectedTransaction.reviewedAt).toLocaleString()} /> : null}
 						{selectedTransaction.rejectionReason ? <Detail label="Rejection reason" value={selectedTransaction.rejectionReason} /> : null}
-						{selectedTransaction.receiptName ? (
+						{selectedTransaction.receiptName && canViewTransactionEvidence ? (
 							<div className="detail-row"><span>Receipt</span><Button type="button" variant="secondary" disabled={isOpeningReceipt} onClick={() => void openReceipt(selectedTransaction)}>{isOpeningReceipt ? <LoaderCircle className="spinner" size={16} /> : <Download size={16} />}{selectedTransaction.receiptName}</Button></div>
-						) : <Detail label="Receipt" value="Not attached" />}
+						) : <Detail label="Receipt" value={selectedTransaction.receiptName ? 'Attached' : 'Not attached'} />}
 						{canReview && selectedTransaction.status === 'pending' ? (
 							<>
 								<Field label="Expense classification">
@@ -419,7 +430,7 @@ export function TransactionsPage() {
 						) : (
 							<Detail label="Expense type" value={selectedTransaction.expenseType} />
 						)}
-						<TransactionTimeline {...transactionHistory} />
+						{canViewTransactionEvidence ? <TransactionTimeline {...transactionHistory} /> : null}
 					</div>
 				</Drawer>
 			) : null}

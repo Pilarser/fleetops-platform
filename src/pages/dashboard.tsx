@@ -4,9 +4,14 @@ import { formatCurrency } from '../data/formatters'
 import { Badge, Card, MetricCard, PageHeader, Table } from '../components/ui'
 import { getDriverName, getServiceLabel, getVehiclePlate, statusTone } from './helpers'
 import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useAuth } from '../state/auth'
+import { canManageFleet, canReviewTransaction } from '../security/permissions'
 
 export function DashboardPage() {
+	const { user } = useAuth()
 	const { drivers, isLoading, services, transactions, vehicles } = useFleetWorkspace()
+	const canManage = canManageFleet(user?.role)
+	const canReview = canReviewTransaction(user?.role)
 	const monthlySpend = transactions.filter((transaction) => transaction.status !== 'withdrawn').reduce((total, transaction) => total + transaction.amount, 0)
 	const pendingTransactions = transactions.filter((transaction) => transaction.status === 'pending').length
 	const reviewQueue = transactions.filter((transaction) => transaction.status === 'pending').sort((left, right) => left.date.localeCompare(right.date))
@@ -58,7 +63,7 @@ export function DashboardPage() {
 				description="Monitor mobility spend, active vehicles, driver usage, and pending actions."
 			/>
 
-			{!isLoading && completedSetupSteps < setupSteps.length ? (
+			{canManage && !isLoading && completedSetupSteps < setupSteps.length ? (
 				<Card className="setup-panel">
 					<div className="setup-heading">
 						<div>
@@ -118,7 +123,7 @@ export function DashboardPage() {
 			<Card className="review-queue">
 				<div className="section-heading">
 					<div><h2>Review queue</h2><p>Pending expenses requiring a fleet or finance decision.</p></div>
-					{reviewQueue.length > 0 ? <Link className="setup-action" to="/transactions?status=pending">View all <ArrowRight size={15} /></Link> : null}
+					{reviewQueue.length > 0 ? <Link className="setup-action" to="/transactions?status=pending">{canReview ? 'Review all' : 'View all'} <ArrowRight size={15} /></Link> : null}
 				</div>
 				<div className="review-summary">
 					<div><AlertTriangle size={17} /><span><strong>{reviewQueue.length}</strong> pending</span></div>
@@ -127,7 +132,7 @@ export function DashboardPage() {
 				</div>
 				{reviewQueue.length > 0 ? (
 					<Table columns={['Date', 'Driver', 'Service', 'Amount', 'Receipt', 'Waiting', '']} rows={reviewQueue.slice(0, 5)} renderRow={(transaction) => (
-						<tr key={transaction.id}><td>{transaction.date}</td><td>{getDriverName(transaction.driverId, drivers)}</td><td>{getServiceLabel(transaction.service, services)}</td><td><strong>{formatCurrency(transaction.amount)}</strong></td><td><Badge tone={transaction.receiptName ? 'green' : 'amber'}>{transaction.receiptName ? 'Attached' : 'Missing'}</Badge></td><td>{daysPending(transaction.date)} days</td><td><Link className="table-action" to={`/transactions?transaction=${encodeURIComponent(transaction.id)}`}>Review</Link></td></tr>
+						<tr key={transaction.id}><td>{transaction.date}</td><td>{getDriverName(transaction.driverId, drivers)}</td><td>{getServiceLabel(transaction.service, services)}</td><td><strong>{formatCurrency(transaction.amount)}</strong></td><td><Badge tone={transaction.receiptName ? 'green' : 'amber'}>{transaction.receiptName ? 'Attached' : 'Missing'}</Badge></td><td>{daysPending(transaction.date)} days</td><td><Link className="table-action" to={`/transactions?transaction=${encodeURIComponent(transaction.id)}`}>{canReview ? 'Review' : 'View'}</Link></td></tr>
 					)} />
 				) : <p className="review-empty"><Check size={18} /> No expenses are waiting for review.</p>}
 			</Card>
