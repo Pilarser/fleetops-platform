@@ -109,6 +109,51 @@ type DbTransactionEvent = {
 	createdAt: Date | string
 }
 
+type DbNotification = {
+	id: string
+	transactionId: string | null
+	type: string
+	title: string
+	message: string
+	readAt: Date | string | null
+	createdAt: Date | string
+}
+
+async function notifyReviewers(
+	transaction: TransactionSql,
+	companyId: string,
+	transactionId: string,
+	excludeUserId: string,
+	message: string,
+) {
+	await transaction`
+		insert into "Notification" (id, "companyId", "userId", "transactionId", type, title, message, "createdAt")
+		select 'notification-' || gen_random_uuid()::text, ${companyId}, u.id, ${transactionId}, 'expense_submitted',
+			'Expense awaiting review', ${message}, now()
+		from "User" u
+		where u."companyId" = ${companyId} and u.status = 'active'
+			and u.role in ('fleet_admin', 'manager', 'finance') and u.id <> ${excludeUserId}
+	`
+}
+
+async function notifyDriver(
+	transaction: TransactionSql,
+	companyId: string,
+	transactionId: string,
+	type: 'expense_approved' | 'expense_rejected',
+	message: string,
+) {
+	await transaction`
+		insert into "Notification" (id, "companyId", "userId", "transactionId", type, title, message, "createdAt")
+		select 'notification-' || gen_random_uuid()::text, ${companyId}, u.id, ${transactionId}, ${type},
+			${type === 'expense_approved' ? 'Expense approved' : 'Expense rejected'}, ${message}, now()
+		from "FleetTransaction" ft
+		join "Driver" d on d.id = ft."driverId" and d."companyId" = ft."companyId"
+		join "User" u on u.id = d."userId" and u.status = 'active'
+		where ft.id = ${transactionId} and ft."companyId" = ${companyId}
+	`
+}
+
 async function appendTransactionEvent(
 	transaction: TransactionSql,
 	companyId: string,
@@ -268,6 +313,7 @@ export async function createDriverTransaction(companyId: string, actor: Transact
 			summary: 'Expense submitted for review.',
 			source: 'driver',
 		})
+		await notifyReviewers(transaction, companyId, id, actor.id, `${actor.name} submitted an expense for review.`)
 		return mapTransaction(created)
 	})
 }
@@ -534,6 +580,7 @@ export async function createTransaction(companyId: string, actor: TransactionAct
 			summary: 'Transaction created in the operations portal.',
 			source: 'backoffice',
 		})
+		await notifyReviewers(transaction, companyId, id, actor.id, `${actor.name} created a transaction requiring review.`)
 		return mapTransaction(created)
 	})
 }
@@ -563,8 +610,51 @@ export async function updateTransaction(
 			expenseType: payload.expenseType,
 			...(payload.rejectionReason ? { rejectionReason: payload.rejectionReason } : {}),
 		})
+		await notifyDriver(
+			transaction,
+			companyId,
+			transactionId,
+			payload.status === 'approved' ? 'expense_approved' : 'expense_rejected',
+			payload.status === 'approved'
+				? `${reviewer.name} approved your expense.`
+				: `${reviewer.name} rejected your expense${payload.rejectionReason ? `: ${payload.rejectionReason}` : '.'}`,
+		)
 		return mapTransaction(updated)
 	})
+}
+
+export async function getNotifications(companyId: string, userId: string) {
+	const notifications = await sql<DbNotification[]>`
+		select id, "transactionId", type, title, message, "readAt", "createdAt"
+		from "Notification"
+		where "companyId" = ${companyId} and "userId" = ${userId}
+		order by "createdAt" desc, id desc
+		limit 40
+	`
+	return notifications.map((notification) => ({
+		...notification,
+		readAt: notification.readAt instanceof Date ? notification.readAt.toISOString() : notification.readAt,
+		createdAt: notification.createdAt instanceof Date ? notification.createdAt.toISOString() : notification.createdAt,
+	}))
+}
+
+export async function markNotificationRead(companyId: string, userId: string, notificationId: string) {
+	const [notification] = await sql<DbNotification[]>`
+		update "Notification" set "readAt" = coalesce("readAt", now())
+		where id = ${notificationId} and "companyId" = ${companyId} and "userId" = ${userId}
+		returning id, "transactionId", type, title, message, "readAt", "createdAt"
+	`
+	if (!notification) throw new ApiError(404, 'Notification not found')
+	return {
+		...notification,
+		readAt: notification.readAt instanceof Date ? notification.readAt.toISOString() : notification.readAt,
+		createdAt: notification.createdAt instanceof Date ? notification.createdAt.toISOString() : notification.createdAt,
+	}
+}
+
+export async function markAllNotificationsRead(companyId: string, userId: string) {
+	await sql`update "Notification" set "readAt" = now() where "companyId" = ${companyId} and "userId" = ${userId} and "readAt" is null`
+	return { ok: true }
 }
 
 export async function getTransactionEvents(companyId: string, userId: string, role: string, transactionId: string) {

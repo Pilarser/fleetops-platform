@@ -7,6 +7,7 @@ import type { DriverTransactionDraft, DriverWorkspace, ServiceType, Transaction 
 import { statusTone } from './helpers'
 import { TransactionTimeline } from '../components/transaction-timeline'
 import { useTransactionEvents } from '../hooks/use-transaction-events'
+import { useSearchParams } from 'react-router-dom'
 
 function today() {
 	const date = new Date()
@@ -32,6 +33,7 @@ export function DriverPortalPage() {
 	const [isWithdrawing, setIsWithdrawing] = useState(false)
 	const [receiptFile, setReceiptFile] = useState<File | null>(null)
 	const [isOpeningReceipt, setIsOpeningReceipt] = useState(false)
+	const [searchParams, setSearchParams] = useSearchParams()
 	const transactionHistory = useTransactionEvents(
 		selectedTransaction?.id,
 		`${selectedTransaction?.status ?? ''}:${selectedTransaction?.receiptName ?? ''}`,
@@ -42,6 +44,13 @@ export function DriverPortalPage() {
 			.then(setWorkspace)
 			.catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Unable to load driver workspace'))
 	}, [])
+
+	useEffect(() => {
+		const transactionId = searchParams.get('transaction')
+		if (!workspace || !transactionId) return
+		const transaction = workspace.transactions.find((item) => item.id === transactionId)
+		if (transaction) setSelectedTransaction(transaction)
+	}, [searchParams, workspace])
 
 	if (error) return <EmptyState title="Unable to load driver workspace" detail={error} />
 	if (!workspace) return <div className="workspace-state" role="status"><LoaderCircle className="workspace-spinner" size={28} /><strong>Loading workspace</strong></div>
@@ -65,13 +74,22 @@ export function DriverPortalPage() {
 	}
 
 	function openEdit(transaction: Transaction) {
-		setSelectedTransaction(null)
+		closeSelectedTransaction()
 		setEditingTransaction(transaction)
 		setDraft(transactionDraft(transaction))
 		setFormError('')
 		setReceiptFile(null)
 		setSuccess('')
 		setIsFormOpen(true)
+	}
+
+	function closeSelectedTransaction() {
+		setSelectedTransaction(null)
+		if (searchParams.has('transaction')) {
+			const next = new URLSearchParams(searchParams)
+			next.delete('transaction')
+			setSearchParams(next, { replace: true })
+		}
 	}
 
 	async function saveTransaction(event: FormEvent<HTMLFormElement>) {
@@ -196,7 +214,7 @@ export function DriverPortalPage() {
 			) : null}
 
 			{selectedTransaction ? (
-				<Drawer title="Transaction details" onClose={() => setSelectedTransaction(null)}>
+				<Drawer title="Transaction details" onClose={closeSelectedTransaction}>
 					<div className="detail-list">
 						<Detail label="Date" value={selectedTransaction.date} /><Detail label="Vehicle" value={workspace.vehicle?.plate ?? selectedTransaction.vehicleId} /><Detail label="Service" value={serviceLabel(selectedTransaction.service)} /><Detail label="Provider" value={selectedTransaction.provider} /><Detail label="Expense type" value={selectedTransaction.expenseType} /><Detail label="VAT" value={formatCurrency(selectedTransaction.vat)} /><Detail label="Amount" value={formatCurrency(selectedTransaction.amount)} /><Detail label="Status" value={selectedTransaction.status} />
 						{selectedTransaction.reviewedByName ? <Detail label="Reviewed by" value={selectedTransaction.reviewedByName} /> : null}

@@ -14,6 +14,7 @@ import { NavLink } from 'react-router-dom'
 import { Button } from './ui'
 import { useAuth } from '../state/auth'
 import { hasSupabaseAuth } from '../services/supabase-auth'
+import { NotificationCenter } from './notification-center'
 
 const navItems = [
 	{ to: '/', label: 'Dashboard', icon: Gauge },
@@ -66,6 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 						<strong>{user?.companyName ?? 'Fleet workspace'}</strong>
 					</div>
 					<div className="topbar-user">
+						<NotificationCenter />
 						<span>{user?.name.split(' ').map((part) => part[0]).join('').slice(0, 2) ?? 'U'}</span>
 						<div>
 							<strong>{user?.name}</strong>

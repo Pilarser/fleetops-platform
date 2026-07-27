@@ -19,6 +19,9 @@ import {
 	getDriverWorkspace,
 	getTeam,
 	getTransactionEvents,
+	getNotifications,
+	markAllNotificationsRead,
+	markNotificationRead,
 	toggleService,
 	updateDriver,
 	updateDriverTransaction,
@@ -88,6 +91,19 @@ Deno.serve(async (request) => {
 
 		if (request.method === 'GET' && path === '/auth/me') {
 			return json(toSessionUser(session))
+		}
+
+		if (request.method === 'GET' && path === '/notifications') {
+			return json(await getNotifications(session.companyId, session.id))
+		}
+
+		if (request.method === 'POST' && path === '/notifications/read-all') {
+			return json(await markAllNotificationsRead(session.companyId, session.id))
+		}
+
+		if (request.method === 'POST' && path.startsWith('/notifications/') && path.endsWith('/read')) {
+			const notificationId = decodeURIComponent(path.slice('/notifications/'.length, -'/read'.length))
+			return json(await markNotificationRead(session.companyId, session.id, notificationId))
 		}
 
 		if (request.method === 'POST' && path === '/auth/accept-invitation') {

@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Car, Check, Circle, CreditCard, Users, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Car, Check, Circle, Clock3, CreditCard, FileWarning, Users, Zap } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { formatCurrency } from '../data/formatters'
 import { Badge, Card, MetricCard, PageHeader, Table } from '../components/ui'
@@ -9,6 +9,10 @@ export function DashboardPage() {
 	const { drivers, isLoading, services, transactions, vehicles } = useFleetWorkspace()
 	const monthlySpend = transactions.filter((transaction) => transaction.status !== 'withdrawn').reduce((total, transaction) => total + transaction.amount, 0)
 	const pendingTransactions = transactions.filter((transaction) => transaction.status === 'pending').length
+	const reviewQueue = transactions.filter((transaction) => transaction.status === 'pending').sort((left, right) => left.date.localeCompare(right.date))
+	const missingReceipts = reviewQueue.filter((transaction) => !transaction.receiptName).length
+	const oldestPending = reviewQueue[0]
+	const daysPending = (date: string) => Math.max(0, Math.floor((Date.now() - new Date(`${date}T00:00:00`).getTime()) / 86_400_000))
 	const enabledServices = services.filter((service) => service.enabled).length
 	const hasVehicle = vehicles.length > 0
 	const hasAssignedDriver = drivers.some((driver) => Boolean(driver.vehicleId))
@@ -110,6 +114,23 @@ export function DashboardPage() {
 					icon={<AlertTriangle size={20} />}
 				/>
 			</div>
+
+			<Card className="review-queue">
+				<div className="section-heading">
+					<div><h2>Review queue</h2><p>Pending expenses requiring a fleet or finance decision.</p></div>
+					{reviewQueue.length > 0 ? <Link className="setup-action" to="/transactions?status=pending">View all <ArrowRight size={15} /></Link> : null}
+				</div>
+				<div className="review-summary">
+					<div><AlertTriangle size={17} /><span><strong>{reviewQueue.length}</strong> pending</span></div>
+					<div><Clock3 size={17} /><span><strong>{oldestPending ? `${daysPending(oldestPending.date)} days` : '-'}</strong> oldest wait</span></div>
+					<div><FileWarning size={17} /><span><strong>{missingReceipts}</strong> missing receipts</span></div>
+				</div>
+				{reviewQueue.length > 0 ? (
+					<Table columns={['Date', 'Driver', 'Service', 'Amount', 'Receipt', 'Waiting', '']} rows={reviewQueue.slice(0, 5)} renderRow={(transaction) => (
+						<tr key={transaction.id}><td>{transaction.date}</td><td>{getDriverName(transaction.driverId, drivers)}</td><td>{getServiceLabel(transaction.service, services)}</td><td><strong>{formatCurrency(transaction.amount)}</strong></td><td><Badge tone={transaction.receiptName ? 'green' : 'amber'}>{transaction.receiptName ? 'Attached' : 'Missing'}</Badge></td><td>{daysPending(transaction.date)} days</td><td><Link className="table-action" to={`/transactions?transaction=${encodeURIComponent(transaction.id)}`}>Review</Link></td></tr>
+					)} />
+				) : <p className="review-empty"><Check size={18} /> No expenses are waiting for review.</p>}
+			</Card>
 
 			<div className="dashboard-grid">
 				<Card>

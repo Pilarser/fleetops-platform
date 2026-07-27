@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import type { Driver, MobilityService, SessionUser, Transaction, TransactionEvent, TransactionEventType, Vehicle } from '../src/types'
+import type { Driver, MobilityService, Notification, SessionUser, Transaction, TransactionEvent, TransactionEventType, Vehicle } from '../src/types'
 import { createSession, prismaAuthProvider, requireRole, requireUser, type AuthProvider } from './auth'
 import { readBody, sendJson } from './http'
 import {
@@ -48,6 +48,16 @@ function transactionChanges(before: Transaction, after: Transaction) {
 		.map((field) => [field, { from: before[field], to: after[field] }]))
 }
 
+function notification(
+	userId: string,
+	transactionId: string,
+	type: Notification['type'],
+	title: string,
+	message: string,
+): Notification & { userId: string } {
+	return { id: `notification-${randomUUID()}`, userId, transactionId, type, title, message, readAt: null, createdAt: new Date().toISOString() }
+}
+
 export function createFleetServer(store: FleetStore = createFleetStore(), authProvider: AuthProvider = prismaAuthProvider) {
 	return createServer(async (request, response) => {
 		const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
@@ -86,6 +96,34 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					return
 				}
 				sendJson(response, 200, user)
+				return
+			}
+
+			if (method === 'GET' && url.pathname === '/api/notifications') {
+				const user = requireUser(request, response)
+				if (!user) return
+				sendJson(response, 200, await store.getNotifications(user.id))
+				return
+			}
+
+			if (method === 'POST' && url.pathname === '/api/notifications/read-all') {
+				const user = requireUser(request, response)
+				if (!user) return
+				await store.markAllNotificationsRead(user.id)
+				sendJson(response, 200, { ok: true })
+				return
+			}
+
+			if (method === 'POST' && url.pathname.startsWith('/api/notifications/') && url.pathname.endsWith('/read')) {
+				const user = requireUser(request, response)
+				if (!user) return
+				const id = decodeURIComponent(url.pathname.slice('/api/notifications/'.length, -'/read'.length))
+				const updated = await store.markNotificationRead(user.id, id)
+				if (!updated) {
+					sendJson(response, 404, { message: 'Notification not found' })
+					return
+				}
+				sendJson(response, 200, updated)
 				return
 			}
 
@@ -134,6 +172,9 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					summary: 'Expense submitted for review.',
 					source: 'driver',
 				}))
+				await store.createNotifications([
+					notification('user-admin', created.id, 'expense_submitted', 'Expense awaiting review', `${driverUser.name} submitted an expense for review.`),
+				])
 				sendJson(response, 201, created)
 				return
 			}
@@ -344,6 +385,19 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					expenseType: payload.expenseType,
 					...(payload.rejectionReason ? { rejectionReason: payload.rejectionReason } : {}),
 				}))
+				const reviewedDriver = (await store.getWorkspace()).drivers.find((driver) => driver.id === updatedTransaction.driverId)
+				const recipientId = reviewedDriver?.accountUserId ?? (reviewedDriver?.id === 'driver-1' ? 'user-driver' : undefined)
+				if (recipientId) {
+					await store.createNotifications([notification(
+						recipientId,
+						id,
+						payload.status === 'approved' ? 'expense_approved' : 'expense_rejected',
+						payload.status === 'approved' ? 'Expense approved' : 'Expense rejected',
+						payload.status === 'approved'
+							? `${reviewer.name} approved your expense.`
+							: `${reviewer.name} rejected your expense${payload.rejectionReason ? `: ${payload.rejectionReason}` : '.'}`,
+					)])
+				}
 				sendJson(response, 200, updatedTransaction)
 				return
 			}

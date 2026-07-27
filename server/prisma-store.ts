@@ -3,6 +3,7 @@ import type {
 	DriverStatus,
 	ProviderLocation,
 	MobilityService,
+	Notification,
 	ServiceType,
 	Transaction,
 	TransactionEvent,
@@ -15,6 +16,7 @@ import type {
 	Driver as PrismaDriver,
 	FleetTransaction as PrismaFleetTransaction,
 	MobilityService as PrismaMobilityService,
+	Notification as PrismaNotification,
 	ProviderLocation as PrismaProviderLocation,
 	TransactionEvent as PrismaTransactionEvent,
 	Vehicle as PrismaVehicle,
@@ -92,6 +94,7 @@ function mapDriver(driver: PrismaDriver): Driver {
 		costCenter: driver.costCenter,
 		monthlySpend: driver.monthlySpend,
 		personalSpend: driver.personalSpend,
+		accountUserId: driver.userId ?? undefined,
 	}
 }
 
@@ -168,6 +171,21 @@ function mapTransactionEvent(event: PrismaTransactionEvent): TransactionEvent {
 	}
 }
 
+function mapNotification(notification: PrismaNotification): Notification {
+	const type = notification.type === 'expense_approved' || notification.type === 'expense_rejected'
+		? notification.type
+		: 'expense_submitted'
+	return {
+		id: notification.id,
+		transactionId: notification.transactionId,
+		type,
+		title: notification.title,
+		message: notification.message,
+		readAt: notification.readAt?.toISOString() ?? null,
+		createdAt: notification.createdAt.toISOString(),
+	}
+}
+
 async function ensureCompany() {
 	await prisma.company.upsert({
 		where: { id: companyId },
@@ -183,12 +201,13 @@ export function createPrismaFleetStore(): FleetStore {
 	return {
 		path: process.env.DATABASE_URL ?? 'postgresql://fleetops:fleetops@localhost:55433/fleetops',
 		getWorkspace: async () => {
-			const [drivers, providers, services, transactions, transactionEvents, vehicles] = await Promise.all([
+			const [drivers, providers, services, transactions, transactionEvents, notifications, vehicles] = await Promise.all([
 				prisma.driver.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),
 				prisma.providerLocation.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),
 				prisma.mobilityService.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),
 				prisma.fleetTransaction.findMany({ orderBy: { date: 'desc' }, where: { companyId } }),
 				prisma.transactionEvent.findMany({ orderBy: { createdAt: 'desc' }, where: { companyId } }),
+				prisma.notification.findMany({ orderBy: { createdAt: 'desc' }, where: { companyId } }),
 				prisma.vehicle.findMany({ orderBy: { plate: 'asc' }, where: { companyId } }),
 			])
 
@@ -198,6 +217,7 @@ export function createPrismaFleetStore(): FleetStore {
 				services: services.map(mapService),
 				transactions: transactions.map(mapTransaction),
 				transactionEvents: transactionEvents.map(mapTransactionEvent),
+				notifications: notifications.map((notification) => ({ ...mapNotification(notification), userId: notification.userId })),
 				vehicles: vehicles.map((vehicle) => mapVehicle(vehicle, drivers)),
 			}
 		},
@@ -216,6 +236,32 @@ export function createPrismaFleetStore(): FleetStore {
 				details: event.details as never,
 			},
 		})),
+		getNotifications: async (userId) => (await prisma.notification.findMany({
+			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+			where: { companyId, userId },
+		})).map(mapNotification),
+		createNotifications: async (notifications) => {
+			if (notifications.length === 0) return
+			await prisma.notification.createMany({
+				data: notifications.map((notification) => ({
+					...notification,
+					companyId,
+					createdAt: new Date(notification.createdAt),
+					readAt: notification.readAt ? new Date(notification.readAt) : null,
+				})),
+			})
+		},
+		markNotificationRead: async (userId, notificationId) => {
+			const current = await prisma.notification.findFirst({ where: { id: notificationId, companyId, userId } })
+			if (!current) return undefined
+			return mapNotification(await prisma.notification.update({
+				where: { id: notificationId },
+				data: { readAt: current.readAt ?? new Date() },
+			}))
+		},
+		markAllNotificationsRead: async (userId) => {
+			await prisma.notification.updateMany({ where: { companyId, userId, readAt: null }, data: { readAt: new Date() } })
+		},
 		getDriverWorkspace: async (userId) => {
 			const driver = await prisma.driver.findFirst({ where: { companyId, userId } })
 			if (!driver) return undefined

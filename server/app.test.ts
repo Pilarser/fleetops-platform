@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { SessionUser, Transaction, TransactionEvent } from '../src/types'
+import type { Notification, SessionUser, Transaction, TransactionEvent } from '../src/types'
 import { createFleetServer } from './app'
 import { createFleetStore } from './storage'
 
@@ -76,6 +76,14 @@ async function getWorkspace(token: string) {
 	})
 	assert.equal(response.status, 200)
 	return (await response.json()) as Awaited<ReturnType<typeof store.getWorkspace>>
+}
+
+async function getNotifications(token: string) {
+	const response = await fetch(`${baseUrl}/api/notifications`, {
+		headers: { authorization: `Bearer ${token}` },
+	})
+	assert.equal(response.status, 200)
+	return (await response.json()) as Notification[]
 }
 
 describe('fleet API', () => {
@@ -299,6 +307,12 @@ describe('fleet API', () => {
 		assert.deepEqual(history.map((event) => event.type), ['approved', 'submitted'])
 		assert.equal(history[0]?.actorId, 'user-admin')
 
+		const driverToken = await login('driver@example.com')
+		const decisionNotification = (await getNotifications(driverToken))
+			.find((notification) => notification.transactionId === created.id)
+		assert.equal(decisionNotification?.type, 'expense_approved')
+		assert.equal(decisionNotification?.readAt, null)
+
 		const invalidRejectionResponse = await fetch(`${baseUrl}/api/transactions/${created.id}`, {
 			method: 'PATCH',
 			headers: {
@@ -423,6 +437,26 @@ describe('fleet API', () => {
 		assert.equal(created.driverId, driverWorkspace.driver.id)
 		assert.equal(created.vehicleId, driverWorkspace.vehicle.id)
 		assert.equal(created.status, 'pending')
+
+		const reviewerNotification = (await getNotifications(adminToken))
+			.find((notification) => notification.transactionId === created.id)
+		assert.equal(reviewerNotification?.type, 'expense_submitted')
+		assert.equal(reviewerNotification?.readAt, null)
+		assert.ok(reviewerNotification)
+
+		const forbiddenReadResponse = await fetch(`${baseUrl}/api/notifications/${reviewerNotification.id}/read`, {
+			method: 'POST',
+			headers: { authorization: `Bearer ${token}` },
+		})
+		assert.equal(forbiddenReadResponse.status, 404)
+
+		const readResponse = await fetch(`${baseUrl}/api/notifications/${reviewerNotification.id}/read`, {
+			method: 'POST',
+			headers: { authorization: `Bearer ${adminToken}` },
+		})
+		const readNotification = (await readResponse.json()) as Notification
+		assert.equal(readResponse.status, 200)
+		assert.ok(readNotification.readAt)
 
 		const otherDriverTransaction = (await store.getWorkspace()).transactions.find((transaction) => transaction.driverId !== driverWorkspace.driver.id)
 		assert.ok(otherDriverTransaction)

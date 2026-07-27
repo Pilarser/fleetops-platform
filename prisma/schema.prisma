@@ -22,22 +22,24 @@ model Company {
   providers         ProviderLocation[]
   transactions      FleetTransaction[]
   transactionEvents TransactionEvent[]
+  notifications     Notification[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
 
 model User {
-  id         String   @id
-  authUserId String?  @unique
-  companyId  String
-  name       String
-  email      String   @unique
-  role       String
-  status     String   @default("active")
-  company    Company  @relation(fields: [companyId], references: [id])
-  driver     Driver?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String         @id
+  authUserId    String?        @unique
+  companyId     String
+  name          String
+  email         String         @unique
+  role          String
+  status        String         @default("active")
+  company       Company        @relation(fields: [companyId], references: [id])
+  driver        Driver?
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Driver {
@@ -127,6 +129,7 @@ model FleetTransaction {
   receiptSize     Int?
   company         Company            @relation(fields: [companyId], references: [id])
   events          TransactionEvent[]
+  notifications   Notification[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 }
@@ -145,4 +148,22 @@ model TransactionEvent {
   createdAt     DateTime         @default(now())
 
   @@index([companyId, transactionId, createdAt])
+}
+
+model Notification {
+  id            String            @id
+  companyId     String
+  userId        String
+  transactionId String?
+  type          String
+  title         String
+  message       String
+  readAt        DateTime?
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction   FleetTransaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime          @default(now())
+
+  @@index([userId, readAt, createdAt])
+  @@index([companyId, transactionId])
 }

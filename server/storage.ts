@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { providers, transactions } from '../src/data/mock-data'
 import { drivers as seedDrivers, services as seedServices, vehicles as seedVehicles } from '../src/data/mock-data'
-import type { Driver, DriverWorkspace, MobilityService, ProviderLocation, Transaction, TransactionEvent, Vehicle } from '../src/types'
+import type { Driver, DriverWorkspace, MobilityService, Notification, ProviderLocation, Transaction, TransactionEvent, Vehicle } from '../src/types'
 
 export interface FleetDatabase {
 	drivers: Driver[]
@@ -10,6 +10,7 @@ export interface FleetDatabase {
 	services: MobilityService[]
 	transactions: Transaction[]
 	transactionEvents: TransactionEvent[]
+	notifications: Array<Notification & { userId: string }>
 	vehicles: Vehicle[]
 }
 
@@ -19,6 +20,10 @@ export interface FleetStore {
 	getDriverWorkspace: (userId: string) => Promise<DriverWorkspace | undefined>
 	getTransactionEvents: (transactionId: string) => Promise<TransactionEvent[]>
 	appendTransactionEvent: (event: TransactionEvent) => Promise<TransactionEvent>
+	getNotifications: (userId: string) => Promise<Notification[]>
+	createNotifications: (notifications: Array<Notification & { userId: string }>) => Promise<void>
+	markNotificationRead: (userId: string, notificationId: string) => Promise<Notification | undefined>
+	markAllNotificationsRead: (userId: string) => Promise<void>
 	createDriver: (driver: Driver) => Promise<Driver>
 	createTransaction: (transaction: Transaction) => Promise<Transaction>
 	createVehicle: (vehicle: Vehicle) => Promise<Vehicle>
@@ -35,6 +40,7 @@ function seedDatabase(): FleetDatabase {
 		services: structuredClone(seedServices),
 		transactions: structuredClone(transactions),
 		transactionEvents: [],
+		notifications: [],
 		vehicles: structuredClone(seedVehicles),
 	}
 }
@@ -48,7 +54,7 @@ function readDatabase(databasePath: string) {
 	try {
 		const raw = readFileSync(databasePath, 'utf8')
 		const database = JSON.parse(raw) as FleetDatabase
-		return { ...database, transactionEvents: database.transactionEvents ?? [] }
+		return { ...database, transactionEvents: database.transactionEvents ?? [], notifications: database.notifications ?? [] }
 	} catch {
 		const database = seedDatabase()
 		writeDatabase(databasePath, database)
@@ -119,6 +125,32 @@ export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'se
 			database = { ...database, transactionEvents: [event, ...database.transactionEvents] }
 			writeDatabase(path, database)
 			return event
+		},
+		getNotifications: async (userId: string) => database.notifications
+			.filter((notification) => notification.userId === userId)
+			.sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+		createNotifications: async (notifications: Array<Notification & { userId: string }>) => {
+			database = { ...database, notifications: [...notifications, ...database.notifications] }
+			writeDatabase(path, database)
+		},
+		markNotificationRead: async (userId: string, notificationId: string) => {
+			let updated: (Notification & { userId: string }) | undefined
+			database = {
+				...database,
+				notifications: database.notifications.map((notification) => {
+					if (notification.id !== notificationId || notification.userId !== userId) return notification
+					updated = { ...notification, readAt: notification.readAt ?? new Date().toISOString() }
+					return updated
+				}),
+			}
+			writeDatabase(path, database)
+			return updated
+		},
+		markAllNotificationsRead: async (userId: string) => {
+			const readAt = new Date().toISOString()
+			database = { ...database, notifications: database.notifications.map((notification) =>
+				notification.userId === userId && !notification.readAt ? { ...notification, readAt } : notification) }
+			writeDatabase(path, database)
 		},
 		createDriver: async (driver: Driver) => {
 			database = {

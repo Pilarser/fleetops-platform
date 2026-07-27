@@ -1,4 +1,4 @@
-import { type FormEvent, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Check, Download, LoaderCircle, Plus, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -55,7 +55,10 @@ export function TransactionsPage() {
 	const { createTransaction, drivers, services, transactions, updateTransaction, vehicles } = useFleetWorkspace()
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [query, setQuery] = useState('')
-	const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+	const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+		const status = searchParams.get('status')
+		return status === 'approved' || status === 'pending' || status === 'rejected' || status === 'withdrawn' ? status : 'all'
+	})
 	const [serviceFilter, setServiceFilter] = useState<ServiceFilter>('all')
 	const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
 	const [isCreateOpen, setIsCreateOpen] = useState(searchParams.get('create') === '1')
@@ -76,6 +79,13 @@ export function TransactionsPage() {
 	const canCreate = Boolean(user && ['fleet_admin', 'manager', 'finance', 'support'].includes(user.role))
 	const canReview = Boolean(user && ['fleet_admin', 'manager', 'finance'].includes(user.role))
 	const enabledServices = services.filter((service) => service.enabled)
+
+	useEffect(() => {
+		const transactionId = searchParams.get('transaction')
+		if (!transactionId) return
+		const transaction = transactions.find((item) => item.id === transactionId)
+		if (transaction) openDetails(transaction)
+	}, [searchParams, transactions])
 
 	const filteredTransactions = useMemo(() => {
 		const normalized = query.trim().toLowerCase()
@@ -124,6 +134,11 @@ export function TransactionsPage() {
 		setSelectedTransaction(null)
 		setReviewError(null)
 		setIsRejecting(false)
+		if (searchParams.has('transaction')) {
+			const next = new URLSearchParams(searchParams)
+			next.delete('transaction')
+			setSearchParams(next, { replace: true })
+		}
 	}
 
 	function selectDriver(driverId: string) {

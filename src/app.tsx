@@ -19,6 +19,7 @@ import { ResetPasswordPage } from './pages/reset-password'
 import { AuthProvider, useAuth } from './state/auth'
 import { FleetWorkspaceProvider, useFleetWorkspace } from './state/fleet-workspace'
 import { Button } from './components/ui'
+import { NotificationProvider } from './state/notifications'
 
 export default function App() {
 	return (
@@ -58,13 +59,15 @@ function AuthenticatedApp() {
 	}
 
 	if (user?.role === 'driver') {
-		return <AppShell><DriverPortalPage /></AppShell>
+		return <NotificationProvider><AppShell><DriverPortalPage /></AppShell></NotificationProvider>
 	}
 
 	return (
-		<FleetWorkspaceProvider>
-			<WorkspaceApp />
-		</FleetWorkspaceProvider>
+		<NotificationProvider>
+			<FleetWorkspaceProvider>
+				<WorkspaceApp />
+			</FleetWorkspaceProvider>
+		</NotificationProvider>
 	)
 }
 

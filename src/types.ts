@@ -114,3 +114,13 @@ export interface TransactionEvent {
 	details: Record<string, unknown>
 	createdAt: string
 }
+
+export interface Notification {
+	id: string
+	transactionId?: string | null
+	type: 'expense_submitted' | 'expense_approved' | 'expense_rejected'
+	title: string
+	message: string
+	readAt?: string | null
+	createdAt: string
+}
