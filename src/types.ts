@@ -1,8 +1,12 @@
-export type ServiceType = 'fuel' | 'charging' | 'parking' | 'fines' | 'wash' | 'tolls' | 'area_c' | 'taxi'
+export type ServiceId = string
+export type ServiceType = ServiceId
+export type CurrencyCode = string
 
-export type TransactionStatus = 'approved' | 'pending' | 'rejected' | 'withdrawn'
+export type ExpenseStatus = 'approved' | 'pending' | 'rejected' | 'withdrawn'
+export type TransactionStatus = ExpenseStatus
 
-export type TransactionEventType = 'submitted' | 'edited' | 'receipt_attached' | 'receipt_replaced' | 'approved' | 'rejected' | 'withdrawn'
+export type ExpenseEventType = 'submitted' | 'edited' | 'receipt_attached' | 'receipt_replaced' | 'approved' | 'rejected' | 'withdrawn'
+export type TransactionEventType = ExpenseEventType
 
 export type VehicleStatus = 'active' | 'maintenance' | 'inactive'
 
@@ -62,37 +66,43 @@ export interface DriverWorkspace {
 	transactions: Transaction[]
 }
 
-export type DriverTransactionDraft = Pick<Transaction, 'date' | 'service' | 'provider' | 'amount' | 'vat' | 'expenseType'>
+export type DriverExpenseDraft = Pick<Expense, 'date' | 'service' | 'provider' | 'amount' | 'vat' | 'expenseType'> &
+	Partial<Pick<Expense, 'currency'>>
+export type DriverTransactionDraft = DriverExpenseDraft
+
+export type ExpenseInput = Omit<Expense, 'id' | 'status' | 'currency'> & Partial<Pick<Expense, 'currency'>>
 
 export interface MobilityService {
-	id: ServiceType
+	id: ServiceId
 	name: string
 	description: string
 	enabled: boolean
 	monthlyLimit: number
+	currency: CurrencyCode
 	requiresApproval: boolean
 }
 
 export interface ProviderLocation {
 	id: string
 	name: string
-	service: ServiceType
+	service: ServiceId
 	address: string
 	city: string
 	distanceKm: number
 	status: 'online' | 'limited' | 'offline'
 }
 
-export interface Transaction {
+export interface Expense {
 	id: string
 	date: string
 	driverId: string
 	vehicleId: string
-	service: ServiceType
+	service: ServiceId
 	provider: string
 	amount: number
 	vat: number
-	status: TransactionStatus
+	currency: CurrencyCode
+	status: ExpenseStatus
 	expenseType: 'business' | 'personal'
 	reviewedById?: string | null
 	reviewedByName?: string | null
@@ -104,16 +114,22 @@ export interface Transaction {
 	receiptSize?: number | null
 }
 
-export interface TransactionEvent {
+/** @deprecated Use Expense for new domain code. */
+export type Transaction = Expense
+
+export interface ExpenseEvent {
 	id: string
 	transactionId: string
-	type: TransactionEventType
+	type: ExpenseEventType
 	actorId: string
 	actorName: string
 	actorRole: string
 	details: Record<string, unknown>
 	createdAt: string
 }
+
+/** @deprecated Use ExpenseEvent for new domain code. */
+export type TransactionEvent = ExpenseEvent
 
 export interface Notification {
 	id: string

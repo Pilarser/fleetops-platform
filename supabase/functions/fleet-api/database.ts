@@ -1,10 +1,9 @@
-import postgres, { type TransactionSql } from 'postgres'
+import type { TransactionSql } from 'postgres'
 import { ApiError } from './http.ts'
-
-export const sql = postgres(Deno.env.get('SUPABASE_DB_URL')!, {
-	max: 1,
-	prepare: false,
-})
+import { expenseChanges } from '../../../shared/domain/expenses.ts'
+import { sql } from './db.ts'
+export { sql } from './db.ts'
+export { getNotifications, markAllNotificationsRead, markNotificationRead } from './notifications.ts'
 
 type DbDriver = {
 	id: string
@@ -59,6 +58,7 @@ type DbTransaction = {
 	provider: string
 	amount: number
 	vat: number
+	currency: string
 	status: string
 	expenseType: string
 	reviewedById: string | null
@@ -79,6 +79,7 @@ type TransactionPayload = {
 	provider: string
 	amount: number
 	vat: number
+	currency: string
 	expenseType: 'business' | 'personal'
 }
 
@@ -106,16 +107,6 @@ type DbTransactionEvent = {
 	actorName: string
 	actorRole: string
 	details: Record<string, unknown> | string
-	createdAt: Date | string
-}
-
-type DbNotification = {
-	id: string
-	transactionId: string | null
-	type: string
-	title: string
-	message: string
-	readAt: Date | string | null
 	createdAt: Date | string
 }
 
@@ -166,13 +157,6 @@ async function appendTransactionEvent(
 		insert into "TransactionEvent" (id, "companyId", "transactionId", type, "actorId", "actorName", "actorRole", details, "createdAt")
 		values (${`event-${crypto.randomUUID()}`}, ${companyId}, ${transactionId}, ${type}, ${actor.id}, ${actor.name}, ${actor.role}, ${transaction.json(details)}, now())
 	`
-}
-
-function transactionChanges(before: DbTransaction, after: DbTransaction) {
-	const fields = ['date', 'service', 'provider', 'amount', 'vat', 'expenseType'] as const
-	return Object.fromEntries(fields
-		.filter((field) => String(before[field]) !== String(after[field]))
-		.map((field) => [field, { from: before[field], to: after[field] }]))
 }
 
 export function mapDriver(driver: DbDriver) {
@@ -230,8 +214,8 @@ export async function getWorkspace(companyId: string) {
 			order by d.name asc
 		`,
 		sql`select id, name, service, address, city, "distanceKm", status from "ProviderLocation" where "companyId" = ${companyId} order by name asc`,
-		sql`select type as id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} order by name asc`,
-		sql<DbTransaction[]>`select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
+		sql`select type as id, name, description, enabled, "monthlyLimit", currency, "requiresApproval" from "MobilityService" where "companyId" = ${companyId} order by name asc`,
+		sql<DbTransaction[]>`select id, date, "driverId", "vehicleId", service, provider, amount, vat, currency, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize" from "FleetTransaction" where "companyId" = ${companyId} order by date desc`,
 		sql<
 			DbVehicle[]
 		>`select id, plate, make, model, "fuelType", status, "costCenter", "monthlySpend", "mileageKm" from "Vehicle" where "companyId" = ${companyId} order by plate asc`,
@@ -263,9 +247,9 @@ export async function getDriverWorkspace(companyId: string, userId: string) {
 		driver.vehicleId
 			? sql<DbVehicle[]>`select id, plate, make, model, "fuelType", status, "costCenter", "monthlySpend", "mileageKm" from "Vehicle" where id = ${driver.vehicleId} and "companyId" = ${companyId}`
 			: Promise.resolve([] as DbVehicle[]),
-		sql`select type as id, name, description, enabled, "monthlyLimit", "requiresApproval" from "MobilityService" where "companyId" = ${companyId} and enabled = true order by name asc`,
+		sql`select type as id, name, description, enabled, "monthlyLimit", currency, "requiresApproval" from "MobilityService" where "companyId" = ${companyId} and enabled = true order by name asc`,
 		sql<DbTransaction[]>`
-			select id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
+			select id, date, "driverId", "vehicleId", service, provider, amount, vat, currency, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 			from "FleetTransaction"
 			where "companyId" = ${companyId} and "driverId" = ${driver.id}
 			order by date desc
@@ -305,9 +289,9 @@ export async function createDriverTransaction(companyId: string, actor: Transact
 		await ensureEnabledService(transaction, companyId, payload.service)
 		const id = `transaction-${crypto.randomUUID()}`
 		const [created] = await transaction<DbTransaction[]>`
-			insert into "FleetTransaction" (id, "companyId", date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "createdAt", "updatedAt")
-			values (${id}, ${companyId}, ${payload.date}, ${context.driverId}, ${context.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, 'pending', ${payload.expenseType}, now(), now())
-			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
+			insert into "FleetTransaction" (id, "companyId", date, "driverId", "vehicleId", service, provider, amount, vat, currency, status, "expenseType", "createdAt", "updatedAt")
+			values (${id}, ${companyId}, ${payload.date}, ${context.driverId}, ${context.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, ${payload.currency}, 'pending', ${payload.expenseType}, now(), now())
+			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, currency, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 		`
 		await appendTransactionEvent(transaction, companyId, id, actor, 'submitted', {
 			summary: 'Expense submitted for review.',
@@ -322,7 +306,7 @@ export async function updateDriverTransaction(companyId: string, actor: Transact
 	return sql.begin(async (transaction) => {
 		await ensureEnabledService(transaction, companyId, payload.service)
 		const [current] = await transaction<DbTransaction[]>`
-			select ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
+			select ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.currency, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
 			from "FleetTransaction" ft
 			join "Driver" d on d.id = ft."driverId" and d."companyId" = ft."companyId"
 			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending' and d."userId" = ${actor.id}
@@ -331,14 +315,14 @@ export async function updateDriverTransaction(companyId: string, actor: Transact
 		if (!current) throw new ApiError(409, 'Only your pending transactions can be edited')
 		const [updated] = await transaction<DbTransaction[]>`
 			update "FleetTransaction" ft
-			set date = ${payload.date}, service = ${payload.service}, provider = ${payload.provider}, amount = ${payload.amount}, vat = ${payload.vat}, "expenseType" = ${payload.expenseType}, "updatedAt" = now()
+			set date = ${payload.date}, service = ${payload.service}, provider = ${payload.provider}, amount = ${payload.amount}, vat = ${payload.vat}, currency = ${payload.currency}, "expenseType" = ${payload.expenseType}, "updatedAt" = now()
 			from "Driver" d
 			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
 				and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${actor.id}
-			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
+			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.currency, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
 		`
 		if (!updated) throw new ApiError(409, 'Only your pending transactions can be edited')
-		const changes = transactionChanges(current, updated)
+		const changes = expenseChanges(current, updated)
 		if (Object.keys(changes).length > 0) {
 			await appendTransactionEvent(transaction, companyId, transactionId, actor, 'edited', {
 				summary: `${Object.keys(changes).length} expense field${Object.keys(changes).length === 1 ? '' : 's'} updated.`,
@@ -356,7 +340,7 @@ export async function withdrawDriverTransaction(companyId: string, actor: Transa
 			from "Driver" d
 			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
 				and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${actor.id}
-			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
+			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.currency, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
 		`
 		if (!updated) throw new ApiError(409, 'Only your pending transactions can be withdrawn')
 		await appendTransactionEvent(transaction, companyId, transactionId, actor, 'withdrawn', { summary: 'Expense withdrawn by driver.' })
@@ -404,7 +388,7 @@ export async function confirmTransactionReceipt(
 			from "Driver" d
 			where ft.id = ${transactionId} and ft."companyId" = ${companyId} and ft.status = 'pending'
 				and d.id = ft."driverId" and d."companyId" = ${companyId} and d."userId" = ${actor.id}
-			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
+			returning ft.id, ft.date, ft."driverId", ft."vehicleId", ft.service, ft.provider, ft.amount, ft.vat, ft.currency, ft.status, ft."expenseType", ft."reviewedById", ft."reviewedByName", ft."reviewedAt", ft."rejectionReason", ft."receiptPath", ft."receiptName", ft."receiptMimeType", ft."receiptSize"
 		`
 		if (!updated) throw new ApiError(409, 'Receipts can only be changed on your pending expenses')
 		const replaced = Boolean(current?.receiptPath)
@@ -546,7 +530,7 @@ export async function toggleService(companyId: string, serviceId: string) {
 		update "MobilityService"
 		set enabled = not enabled, "updatedAt" = now()
 		where type = ${serviceId} and "companyId" = ${companyId}
-		returning type as id, name, description, enabled, "monthlyLimit", "requiresApproval"
+		returning type as id, name, description, enabled, "monthlyLimit", currency, "requiresApproval"
 	`
 	if (!service) {
 		throw new ApiError(404, 'Service not found')
@@ -572,9 +556,9 @@ export async function createTransaction(companyId: string, actor: TransactionAct
 
 		const id = `transaction-${crypto.randomUUID()}`
 		const [created] = await transaction<DbTransaction[]>`
-			insert into "FleetTransaction" (id, "companyId", date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "createdAt", "updatedAt")
-			values (${id}, ${companyId}, ${payload.date}, ${payload.driverId}, ${payload.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, 'pending', ${payload.expenseType}, now(), now())
-			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
+			insert into "FleetTransaction" (id, "companyId", date, "driverId", "vehicleId", service, provider, amount, vat, currency, status, "expenseType", "createdAt", "updatedAt")
+			values (${id}, ${companyId}, ${payload.date}, ${payload.driverId}, ${payload.vehicleId}, ${payload.service}, ${payload.provider}, ${payload.amount}, ${payload.vat}, ${payload.currency}, 'pending', ${payload.expenseType}, now(), now())
+			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, currency, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 		`
 		await appendTransactionEvent(transaction, companyId, id, actor, 'submitted', {
 			summary: 'Transaction created in the operations portal.',
@@ -602,7 +586,7 @@ export async function updateTransaction(
 				"rejectionReason" = ${payload.status === 'rejected' ? payload.rejectionReason ?? null : null},
 				"updatedAt" = now()
 			where id = ${transactionId} and "companyId" = ${companyId} and status = 'pending'
-			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
+			returning id, date, "driverId", "vehicleId", service, provider, amount, vat, currency, status, "expenseType", "reviewedById", "reviewedByName", "reviewedAt", "rejectionReason", "receiptPath", "receiptName", "receiptMimeType", "receiptSize"
 		`
 		if (!updated) throw new ApiError(409, 'Only pending transactions can be reviewed')
 		await appendTransactionEvent(transaction, companyId, transactionId, reviewer, payload.status, {
@@ -621,40 +605,6 @@ export async function updateTransaction(
 		)
 		return mapTransaction(updated)
 	})
-}
-
-export async function getNotifications(companyId: string, userId: string) {
-	const notifications = await sql<DbNotification[]>`
-		select id, "transactionId", type, title, message, "readAt", "createdAt"
-		from "Notification"
-		where "companyId" = ${companyId} and "userId" = ${userId}
-		order by "createdAt" desc, id desc
-		limit 40
-	`
-	return notifications.map((notification) => ({
-		...notification,
-		readAt: notification.readAt instanceof Date ? notification.readAt.toISOString() : notification.readAt,
-		createdAt: notification.createdAt instanceof Date ? notification.createdAt.toISOString() : notification.createdAt,
-	}))
-}
-
-export async function markNotificationRead(companyId: string, userId: string, notificationId: string) {
-	const [notification] = await sql<DbNotification[]>`
-		update "Notification" set "readAt" = coalesce("readAt", now())
-		where id = ${notificationId} and "companyId" = ${companyId} and "userId" = ${userId}
-		returning id, "transactionId", type, title, message, "readAt", "createdAt"
-	`
-	if (!notification) throw new ApiError(404, 'Notification not found')
-	return {
-		...notification,
-		readAt: notification.readAt instanceof Date ? notification.readAt.toISOString() : notification.readAt,
-		createdAt: notification.createdAt instanceof Date ? notification.createdAt.toISOString() : notification.createdAt,
-	}
-}
-
-export async function markAllNotificationsRead(companyId: string, userId: string) {
-	await sql`update "Notification" set "readAt" = now() where "companyId" = ${companyId} and "userId" = ${userId} and "readAt" is null`
-	return { ok: true }
 }
 
 export async function getTransactionEvents(companyId: string, userId: string, role: string, transactionId: string) {

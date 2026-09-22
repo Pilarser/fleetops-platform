@@ -1,5 +1,5 @@
 import { createClient, type Session } from 'supabase'
-import { sql } from './database.ts'
+import { sql } from './db.ts'
 import { ApiError } from './http.ts'
 import { registrationMetadataSchema } from './schemas.ts'
 

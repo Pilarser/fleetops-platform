@@ -135,6 +135,7 @@ for (const service of services) {
             description: service.description,
             enabled: service.enabled,
             monthlyLimit: service.monthlyLimit,
+			currency: service.currency,
             requiresApproval: service.requiresApproval,
         },
         create: {
@@ -145,6 +146,7 @@ for (const service of services) {
             description: service.description,
             enabled: service.enabled,
             monthlyLimit: service.monthlyLimit,
+			currency: service.currency,
             requiresApproval: service.requiresApproval,
         },
     })
@@ -175,7 +177,7 @@ for (const provider of providers) {
 }
 
 for (const transaction of transactions) {
-    await prisma.fleetTransaction.upsert({
+    await prisma.expense.upsert({
         where: { id: transaction.id },
         update: {
             date: transaction.date,
@@ -185,6 +187,7 @@ for (const transaction of transactions) {
             provider: transaction.provider,
             amount: transaction.amount,
             vat: transaction.vat,
+			currency: transaction.currency,
             status: transaction.status,
             expenseType: transaction.expenseType,
         },
@@ -198,6 +201,7 @@ for (const transaction of transactions) {
             provider: transaction.provider,
             amount: transaction.amount,
             vat: transaction.vat,
+			currency: transaction.currency,
             status: transaction.status,
             expenseType: transaction.expenseType,
         },

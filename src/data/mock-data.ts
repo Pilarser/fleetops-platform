@@ -101,6 +101,7 @@ export const services: MobilityService[] = [
 		description: 'Fuel payments and business/private expense split.',
 		enabled: true,
 		monthlyLimit: 1200,
+		currency: 'EUR',
 		requiresApproval: false,
 	},
 	{
@@ -109,6 +110,7 @@ export const services: MobilityService[] = [
 		description: 'Charging sessions from enabled provider networks.',
 		enabled: true,
 		monthlyLimit: 800,
+		currency: 'EUR',
 		requiresApproval: false,
 	},
 	{
@@ -117,6 +119,7 @@ export const services: MobilityService[] = [
 		description: 'Street parking, garage payments, and parking history.',
 		enabled: true,
 		monthlyLimit: 300,
+		currency: 'EUR',
 		requiresApproval: false,
 	},
 	{
@@ -125,6 +128,7 @@ export const services: MobilityService[] = [
 		description: 'Fine intake, assignment, payment, and dispute workflow.',
 		enabled: true,
 		monthlyLimit: 500,
+		currency: 'EUR',
 		requiresApproval: true,
 	},
 	{
@@ -133,6 +137,7 @@ export const services: MobilityService[] = [
 		description: 'Bookable washes with receipt consolidation.',
 		enabled: true,
 		monthlyLimit: 180,
+		currency: 'EUR',
 		requiresApproval: false,
 	},
 	{
@@ -141,6 +146,7 @@ export const services: MobilityService[] = [
 		description: 'Toll device usage and toll provider reconciliation.',
 		enabled: false,
 		monthlyLimit: 600,
+		currency: 'EUR',
 		requiresApproval: false,
 	},
 	{
@@ -149,6 +155,7 @@ export const services: MobilityService[] = [
 		description: 'Urban access payments by plate and city rule set.',
 		enabled: true,
 		monthlyLimit: 160,
+		currency: 'EUR',
 		requiresApproval: false,
 	},
 	{
@@ -157,6 +164,7 @@ export const services: MobilityService[] = [
 		description: 'Ride booking and corporate payment attribution.',
 		enabled: false,
 		monthlyLimit: 400,
+		currency: 'EUR',
 		requiresApproval: true,
 	},
 ]
@@ -210,6 +218,7 @@ export const transactions: Transaction[] = [
 		provider: 'FuelPlus Porta Romana',
 		amount: 84.9,
 		vat: 15.31,
+		currency: 'EUR',
 		status: 'approved',
 		expenseType: 'business',
 	},
@@ -222,6 +231,7 @@ export const transactions: Transaction[] = [
 		provider: 'Energia Fast Charge Milano',
 		amount: 31.6,
 		vat: 5.7,
+		currency: 'EUR',
 		status: 'approved',
 		expenseType: 'business',
 	},
@@ -234,6 +244,7 @@ export const transactions: Transaction[] = [
 		provider: 'Parking Centrale',
 		amount: 18,
 		vat: 3.25,
+		currency: 'EUR',
 		status: 'approved',
 		expenseType: 'personal',
 	},
@@ -246,6 +257,7 @@ export const transactions: Transaction[] = [
 		provider: 'Comune di Milano',
 		amount: 72.8,
 		vat: 0,
+		currency: 'EUR',
 		status: 'pending',
 		expenseType: 'business',
 	},
@@ -258,6 +270,7 @@ export const transactions: Transaction[] = [
 		provider: 'Centro Lavaggio Navigli',
 		amount: 24,
 		vat: 4.33,
+		currency: 'EUR',
 		status: 'approved',
 		expenseType: 'business',
 	},

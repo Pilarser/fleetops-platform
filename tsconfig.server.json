@@ -16,5 +16,5 @@
 		"noEmit": true,
 		"jsx": "react-jsx"
 	},
-	"include": ["server", "src/data", "src/types.ts"]
+	"include": ["server", "shared", "src/data", "src/types.ts"]
 }

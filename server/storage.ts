@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { providers, transactions } from '../src/data/mock-data'
 import { drivers as seedDrivers, services as seedServices, vehicles as seedVehicles } from '../src/data/mock-data'
 import type { Driver, DriverWorkspace, MobilityService, Notification, ProviderLocation, Transaction, TransactionEvent, Vehicle } from '../src/types'
+import { applyDriverAssignment, applyDriverToVehicles, assignVehicleDriver } from '../shared/domain/fleet'
 
 export interface FleetDatabase {
 	drivers: Driver[]
@@ -54,52 +55,18 @@ function readDatabase(databasePath: string) {
 	try {
 		const raw = readFileSync(databasePath, 'utf8')
 		const database = JSON.parse(raw) as FleetDatabase
-		return { ...database, transactionEvents: database.transactionEvents ?? [], notifications: database.notifications ?? [] }
+		return {
+			...database,
+			services: database.services.map((service) => ({ ...service, currency: service.currency ?? 'EUR' })),
+			transactions: database.transactions.map((expense) => ({ ...expense, currency: expense.currency ?? 'EUR' })),
+			transactionEvents: database.transactionEvents ?? [],
+			notifications: database.notifications ?? [],
+		}
 	} catch {
 		const database = seedDatabase()
 		writeDatabase(databasePath, database)
 		return database
 	}
-}
-
-function applyDriverAssignment(drivers: Driver[], driver: Driver) {
-	return drivers.map((item) => {
-		if (item.id === driver.id) {
-			return driver
-		}
-		if (driver.vehicleId && item.vehicleId === driver.vehicleId) {
-			return { ...item, vehicleId: '' }
-		}
-		return item
-	})
-}
-
-function assignVehicleDriver(drivers: Driver[], vehicle: Vehicle) {
-	if (!vehicle.assignedDriverId) {
-		return drivers.map((driver) => (driver.vehicleId === vehicle.id ? { ...driver, vehicleId: '' } : driver))
-	}
-
-	return drivers.map((driver) => {
-		if (driver.id === vehicle.assignedDriverId) {
-			return { ...driver, vehicleId: vehicle.id }
-		}
-		if (driver.vehicleId === vehicle.id) {
-			return { ...driver, vehicleId: '' }
-		}
-		return driver
-	})
-}
-
-function applyDriverToVehicles(vehicles: Vehicle[], driver: Driver) {
-	return vehicles.map((vehicle) => {
-		if (driver.vehicleId && vehicle.id === driver.vehicleId) {
-			return { ...vehicle, assignedDriverId: driver.id }
-		}
-		if (vehicle.assignedDriverId === driver.id) {
-			return { ...vehicle, assignedDriverId: '' }
-		}
-		return vehicle
-	})
 }
 
 export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'server/.data/fleet-db.json')) {

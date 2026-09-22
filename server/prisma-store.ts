@@ -14,7 +14,7 @@ import type {
 } from '../src/types'
 import type {
 	Driver as PrismaDriver,
-	FleetTransaction as PrismaFleetTransaction,
+	Expense as PrismaExpense,
 	MobilityService as PrismaMobilityService,
 	Notification as PrismaNotification,
 	ProviderLocation as PrismaProviderLocation,
@@ -46,19 +46,7 @@ function normalizeFuelType(fuelType: string): Vehicle['fuelType'] {
 }
 
 function normalizeServiceType(service: string): ServiceType {
-	if (
-		service === 'fuel' ||
-		service === 'charging' ||
-		service === 'parking' ||
-		service === 'fines' ||
-		service === 'wash' ||
-		service === 'tolls' ||
-		service === 'area_c' ||
-		service === 'taxi'
-	) {
-		return service
-	}
-	return 'fuel'
+	return service
 }
 
 function normalizeTransactionStatus(status: string): TransactionStatus {
@@ -92,8 +80,8 @@ function mapDriver(driver: PrismaDriver): Driver {
 		status: normalizeDriverStatus(driver.status),
 		vehicleId: driver.vehicleId ?? '',
 		costCenter: driver.costCenter,
-		monthlySpend: driver.monthlySpend,
-		personalSpend: driver.personalSpend,
+		monthlySpend: Number(driver.monthlySpend),
+		personalSpend: Number(driver.personalSpend),
 		accountUserId: driver.userId ?? undefined,
 	}
 }
@@ -109,7 +97,7 @@ function mapVehicle(vehicle: PrismaVehicle, drivers: PrismaDriver[]): Vehicle {
 		status: normalizeVehicleStatus(vehicle.status),
 		assignedDriverId: assignedDriver?.id ?? '',
 		costCenter: vehicle.costCenter,
-		monthlySpend: vehicle.monthlySpend,
+		monthlySpend: Number(vehicle.monthlySpend),
 		mileageKm: vehicle.mileageKm,
 	}
 }
@@ -120,7 +108,8 @@ function mapService(service: PrismaMobilityService): MobilityService {
 		name: service.name,
 		description: service.description,
 		enabled: service.enabled,
-		monthlyLimit: service.monthlyLimit,
+		monthlyLimit: Number(service.monthlyLimit),
+		currency: service.currency,
 		requiresApproval: service.requiresApproval,
 	}
 }
@@ -137,7 +126,7 @@ function mapProvider(provider: PrismaProviderLocation): ProviderLocation {
 	}
 }
 
-function mapTransaction(transaction: PrismaFleetTransaction): Transaction {
+function mapTransaction(transaction: PrismaExpense): Transaction {
 	return {
 		id: transaction.id,
 		date: transaction.date,
@@ -145,8 +134,9 @@ function mapTransaction(transaction: PrismaFleetTransaction): Transaction {
 		vehicleId: transaction.vehicleId,
 		service: normalizeServiceType(transaction.service),
 		provider: transaction.provider,
-		amount: transaction.amount,
-		vat: transaction.vat,
+		amount: Number(transaction.amount),
+		vat: Number(transaction.vat),
+		currency: transaction.currency,
 		status: normalizeTransactionStatus(transaction.status),
 		expenseType: normalizeExpenseType(transaction.expenseType),
 		reviewedById: transaction.reviewedById,
@@ -205,7 +195,7 @@ export function createPrismaFleetStore(): FleetStore {
 				prisma.driver.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),
 				prisma.providerLocation.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),
 				prisma.mobilityService.findMany({ orderBy: { name: 'asc' }, where: { companyId } }),
-				prisma.fleetTransaction.findMany({ orderBy: { date: 'desc' }, where: { companyId } }),
+				prisma.expense.findMany({ orderBy: { date: 'desc' }, where: { companyId } }),
 				prisma.transactionEvent.findMany({ orderBy: { createdAt: 'desc' }, where: { companyId } }),
 				prisma.notification.findMany({ orderBy: { createdAt: 'desc' }, where: { companyId } }),
 				prisma.vehicle.findMany({ orderBy: { plate: 'asc' }, where: { companyId } }),
@@ -268,7 +258,7 @@ export function createPrismaFleetStore(): FleetStore {
 			const [vehicle, services, transactions] = await Promise.all([
 				driver.vehicleId ? prisma.vehicle.findFirst({ where: { companyId, id: driver.vehicleId } }) : null,
 				prisma.mobilityService.findMany({ orderBy: { name: 'asc' }, where: { companyId, enabled: true } }),
-				prisma.fleetTransaction.findMany({ orderBy: { date: 'desc' }, where: { companyId, driverId: driver.id } }),
+				prisma.expense.findMany({ orderBy: { date: 'desc' }, where: { companyId, driverId: driver.id } }),
 			])
 			return {
 				driver: mapDriver(driver),
@@ -307,7 +297,7 @@ export function createPrismaFleetStore(): FleetStore {
 			return mapDriver(createdDriver)
 		},
 		createTransaction: async (transaction) => {
-			const createdTransaction = await prisma.fleetTransaction.create({
+			const createdTransaction = await prisma.expense.create({
 				data: {
 					id: transaction.id,
 					companyId,
@@ -318,6 +308,7 @@ export function createPrismaFleetStore(): FleetStore {
 					provider: transaction.provider,
 					amount: transaction.amount,
 					vat: transaction.vat,
+					currency: transaction.currency,
 					status: transaction.status,
 					expenseType: transaction.expenseType,
 					reviewedById: transaction.reviewedById,
@@ -406,7 +397,7 @@ export function createPrismaFleetStore(): FleetStore {
 		},
 		updateTransaction: async (transaction) => {
 			try {
-				const updatedTransaction = await prisma.fleetTransaction.update({
+				const updatedTransaction = await prisma.expense.update({
 					where: { id: transaction.id },
 					data: {
 						date: transaction.date,
@@ -414,6 +405,7 @@ export function createPrismaFleetStore(): FleetStore {
 						provider: transaction.provider,
 						amount: transaction.amount,
 						vat: transaction.vat,
+						currency: transaction.currency,
 						status: transaction.status,
 						expenseType: transaction.expenseType,
 						reviewedById: transaction.reviewedById,

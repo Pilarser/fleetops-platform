@@ -7,7 +7,8 @@ import {
 	vehicles as initialVehicles,
 } from '../data/mock-data'
 import { fleetApi, hasFleetApi, type FleetWorkspacePayload } from '../services/fleet-api'
-import type { Driver, MobilityService, ProviderLocation, Transaction, Vehicle } from '../types'
+import type { Driver, ExpenseInput, MobilityService, ProviderLocation, Transaction, Vehicle } from '../types'
+import { applyDriverAssignment, applyDriverToVehicles, assignVehicleDriver } from '../../shared/domain/fleet'
 
 interface FleetWorkspaceState {
 	apiMode: 'connected' | 'local'
@@ -21,7 +22,7 @@ interface FleetWorkspaceState {
 	reloadWorkspace: () => Promise<void>
 	createDriver: (driver: Omit<Driver, 'id' | 'monthlySpend' | 'personalSpend' | 'accountStatus'>) => Promise<Driver>
 	createVehicle: (vehicle: Omit<Vehicle, 'id' | 'monthlySpend'>) => Promise<void>
-	createTransaction: (transaction: Omit<Transaction, 'id' | 'status'>) => Promise<Transaction>
+	createTransaction: (transaction: ExpenseInput) => Promise<Transaction>
 	updateDriver: (driver: Driver) => Promise<void>
 	updateVehicle: (vehicle: Vehicle) => Promise<void>
 	updateTransaction: (
@@ -40,46 +41,6 @@ const FleetWorkspaceContext = createContext<FleetWorkspaceState | undefined>(und
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now()}`
-}
-
-function applyDriverAssignment(drivers: Driver[], driver: Driver) {
-	return drivers.map((item) => {
-		if (item.id === driver.id) {
-			return driver
-		}
-		if (driver.vehicleId && item.vehicleId === driver.vehicleId) {
-			return { ...item, vehicleId: '' }
-		}
-		return item
-	})
-}
-
-function assignVehicleDriver(drivers: Driver[], vehicle: Vehicle) {
-	if (!vehicle.assignedDriverId) {
-		return drivers.map((driver) => (driver.vehicleId === vehicle.id ? { ...driver, vehicleId: '' } : driver))
-	}
-
-	return drivers.map((driver) => {
-		if (driver.id === vehicle.assignedDriverId) {
-			return { ...driver, vehicleId: vehicle.id }
-		}
-		if (driver.vehicleId === vehicle.id) {
-			return { ...driver, vehicleId: '' }
-		}
-		return driver
-	})
-}
-
-function applyDriverToVehicles(vehicles: Vehicle[], driver: Driver) {
-	return vehicles.map((vehicle) => {
-		if (driver.vehicleId && vehicle.id === driver.vehicleId) {
-			return { ...vehicle, assignedDriverId: driver.id }
-		}
-		if (vehicle.assignedDriverId === driver.id) {
-			return { ...vehicle, assignedDriverId: '' }
-		}
-		return vehicle
-	})
 }
 
 export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
@@ -109,7 +70,12 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 		setIsLoading(true)
 		setLoadError(null)
 		try {
-			applyWorkspace(await fleetApi.getWorkspace())
+			const [fleet, catalog, ledger] = await Promise.all([
+				fleetApi.getFleetInventory(),
+				fleetApi.getServiceCatalog(),
+				fleetApi.getExpenseLedger(),
+			])
+			applyWorkspace({ ...fleet, ...catalog, ...ledger })
 		} catch (error) {
 			setLoadError(error instanceof Error ? error.message : 'Unable to load the fleet workspace')
 		} finally {
@@ -122,7 +88,12 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 	}, [reloadWorkspace])
 
 	async function refreshWorkspace() {
-		applyWorkspace(await fleetApi.getWorkspace())
+		const [fleet, catalog, ledger] = await Promise.all([
+			fleetApi.getFleetInventory(),
+			fleetApi.getServiceCatalog(),
+			fleetApi.getExpenseLedger(),
+		])
+		applyWorkspace({ ...fleet, ...catalog, ...ledger })
 	}
 
 	const value = useMemo<FleetWorkspaceState>(
@@ -178,13 +149,14 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 			},
 			createTransaction: async (transaction) => {
 				if (hasFleetApi()) {
-					const created = await fleetApi.createTransaction(transaction)
+					const created = await fleetApi.createExpense(transaction)
 					setTransactions((current) => [created, ...current])
 					return created
 				}
 
 				const created: Transaction = {
 					...transaction,
+					currency: transaction.currency ?? 'EUR',
 					id: nextId('transaction'),
 					status: 'pending',
 				}
@@ -211,7 +183,7 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 			},
 			updateTransaction: async (transactionId, review) => {
 				if (hasFleetApi()) {
-					const updated = await fleetApi.updateTransaction(transactionId, review)
+					const updated = await fleetApi.reviewExpense(transactionId, review)
 					setTransactions((current) => current.map((item) => (item.id === transactionId ? updated : item)))
 					return updated
 				}

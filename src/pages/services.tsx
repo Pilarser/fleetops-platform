@@ -28,7 +28,7 @@ export function ServicesPage() {
 						<div className="service-card-meta">
 							<div>
 								<span>Monthly limit</span>
-								<strong>{formatCurrency(service.monthlyLimit)}</strong>
+								<strong>{formatCurrency(service.monthlyLimit, service.currency)}</strong>
 							</div>
 							<div>
 								<span>Approval</span>

@@ -19,9 +19,6 @@ import {
 	getDriverWorkspace,
 	getTeam,
 	getTransactionEvents,
-	getNotifications,
-	markAllNotificationsRead,
-	markNotificationRead,
 	toggleService,
 	updateDriver,
 	updateDriverTransaction,
@@ -29,6 +26,7 @@ import {
 	updateVehicle,
 	withdrawDriverTransaction,
 } from './database.ts'
+import { getNotifications, markAllNotificationsRead, markNotificationRead } from './notifications.ts'
 import { ApiError, corsHeaders, json, readJson } from './http.ts'
 import {
 	accountLifecycleSchema,
@@ -169,15 +167,15 @@ Deno.serve(async (request) => {
 			return json(await confirmReceipt(session, transactionId, payload))
 		}
 
-		if (request.method === 'GET' && path.startsWith('/transactions/') && path.endsWith('/receipt')) {
+		if (request.method === 'GET' && (path.startsWith('/expenses/') || path.startsWith('/transactions/')) && path.endsWith('/receipt')) {
 			requireRole(session, ['fleet_admin', 'manager', 'finance', 'driver'])
-			const transactionId = decodeURIComponent(path.slice('/transactions/'.length, -'/receipt'.length))
+			const transactionId = decodeURIComponent(path.replace(/^\/(expenses|transactions)\//, '').slice(0, -'/receipt'.length))
 			return json(await createReceiptDownload(session, transactionId))
 		}
 
-		if (request.method === 'GET' && path.startsWith('/transactions/') && path.endsWith('/events')) {
+		if (request.method === 'GET' && (path.startsWith('/expenses/') || path.startsWith('/transactions/')) && path.endsWith('/events')) {
 			requireRole(session, ['fleet_admin', 'manager', 'finance', 'driver'])
-			const transactionId = decodeURIComponent(path.slice('/transactions/'.length, -'/events'.length))
+			const transactionId = decodeURIComponent(path.replace(/^\/(expenses|transactions)\//, '').slice(0, -'/events'.length))
 			return json(await getTransactionEvents(session.companyId, session.id, session.role, transactionId))
 		}
 
@@ -191,6 +189,14 @@ Deno.serve(async (request) => {
 		if (request.method === 'GET' && path === '/workspace') {
 			requireRole(session, [...workspaceRoles])
 			return json(await getWorkspace(session.companyId))
+		}
+
+		if (request.method === 'GET' && ['/fleet', '/service-catalog', '/expenses'].includes(path)) {
+			requireRole(session, [...workspaceRoles])
+			const workspace = await getWorkspace(session.companyId)
+			if (path === '/fleet') return json({ drivers: workspace.drivers, vehicles: workspace.vehicles })
+			if (path === '/service-catalog') return json({ providers: workspace.providers, services: workspace.services })
+			return json({ transactions: workspace.transactions })
 		}
 
 		if (request.method === 'POST' && path === '/drivers') {
@@ -233,15 +239,15 @@ Deno.serve(async (request) => {
 			return json(await toggleService(session.companyId, serviceId))
 		}
 
-		if (request.method === 'POST' && path === '/transactions') {
+		if (request.method === 'POST' && (path === '/expenses' || path === '/transactions')) {
 			requireRole(session, [...transactionCreateRoles])
 			const payload = transactionPayloadSchema.parse(await readJson(request))
 			return json(await createTransaction(session.companyId, session, payload), 201)
 		}
 
-		if (request.method === 'PATCH' && path.startsWith('/transactions/')) {
+		if (request.method === 'PATCH' && (path.startsWith('/expenses/') || path.startsWith('/transactions/'))) {
 			requireRole(session, [...transactionReviewRoles])
-			const transactionId = decodeURIComponent(path.slice('/transactions/'.length))
+			const transactionId = decodeURIComponent(path.replace(/^\/(expenses|transactions)\//, ''))
 			const payload = transactionReviewSchema.parse(await readJson(request))
 			return json(await updateTransaction(session.companyId, transactionId, payload, session))
 		}

@@ -21,13 +21,13 @@ import { TransactionTimeline } from '../components/transaction-timeline'
 import { useTransactionEvents } from '../hooks/use-transaction-events'
 import { useAuth } from '../state/auth'
 import { useFleetWorkspace } from '../state/fleet-workspace'
-import type { ServiceType, Transaction, TransactionStatus } from '../types'
+import type { ExpenseInput, ServiceType, Transaction, TransactionStatus } from '../types'
 import { getDriverName, getServiceLabel, getVehiclePlate, statusTone } from './helpers'
 import { canCreateTransaction, canReviewTransaction, canViewReports } from '../security/permissions'
 
 type StatusFilter = TransactionStatus | 'all'
 type ServiceFilter = ServiceType | 'all'
-type TransactionDraft = Omit<Transaction, 'id' | 'status'>
+type TransactionDraft = ExpenseInput
 
 function today() {
 	const date = new Date()
@@ -297,9 +297,9 @@ export function TransactionsPage() {
 								<td>
 									<Badge tone={transaction.expenseType === 'business' ? 'blue' : 'amber'}>{transaction.expenseType}</Badge>
 								</td>
-								<td>{formatCurrency(transaction.vat)}</td>
+								<td>{formatCurrency(transaction.vat, transaction.currency)}</td>
 								<td>
-									<strong>{formatCurrency(transaction.amount)}</strong>
+									<strong>{formatCurrency(transaction.amount, transaction.currency)}</strong>
 								</td>
 								<td>
 									<Badge tone={statusTone(transaction.status)}>{transaction.status}</Badge>
@@ -377,8 +377,8 @@ export function TransactionsPage() {
 						<Detail label="Vehicle" value={getVehiclePlate(selectedTransaction.vehicleId, vehicles)} />
 						<Detail label="Service" value={getServiceLabel(selectedTransaction.service, services)} />
 						<Detail label="Provider" value={selectedTransaction.provider} />
-						<Detail label="VAT" value={formatCurrency(selectedTransaction.vat)} />
-						<Detail label="Amount" value={formatCurrency(selectedTransaction.amount)} />
+						<Detail label="VAT" value={formatCurrency(selectedTransaction.vat, selectedTransaction.currency)} />
+						<Detail label="Amount" value={formatCurrency(selectedTransaction.amount, selectedTransaction.currency)} />
 						<Detail label="Status" value={selectedTransaction.status} />
 						{selectedTransaction.reviewedByName ? <Detail label="Reviewed by" value={selectedTransaction.reviewedByName} /> : null}
 						{selectedTransaction.reviewedAt ? <Detail label="Reviewed at" value={new Date(selectedTransaction.reviewedAt).toLocaleString()} /> : null}

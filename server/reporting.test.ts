@@ -10,12 +10,12 @@ const vehicles: Vehicle[] = [
 	{ id: 'vehicle-1', plate: 'GE842LK', make: 'Fiat', model: '500e', fuelType: 'electric', status: 'active', assignedDriverId: 'driver-1', costCenter: 'Operations', monthlySpend: 0, mileageKm: 100 },
 ]
 const services: MobilityService[] = [
-	{ id: 'area_c', name: 'Area C', description: '', enabled: true, monthlyLimit: 100, requiresApproval: true },
+	{ id: 'area_c', name: 'Area C', description: '', enabled: true, monthlyLimit: 100, currency: 'EUR', requiresApproval: true },
 ]
 const transactions: Transaction[] = [
-	{ id: 'approved', date: '2026-07-10', driverId: 'driver-1', vehicleId: 'vehicle-1', service: 'area_c', provider: 'Comune di "Milano"', amount: 20, vat: 4, status: 'approved', expenseType: 'business', receiptName: 'receipt.pdf', reviewedByName: 'Admin' },
-	{ id: 'pending', date: '2026-07-11', driverId: 'driver-1', vehicleId: 'vehicle-1', service: 'area_c', provider: 'Comune di Milano', amount: 10, vat: 2, status: 'pending', expenseType: 'personal' },
-	{ id: 'outside', date: '2026-06-30', driverId: 'driver-1', vehicleId: 'vehicle-1', service: 'area_c', provider: 'Comune di Milano', amount: 30, vat: 6, status: 'approved', expenseType: 'personal' },
+	{ id: 'approved', date: '2026-07-10', driverId: 'driver-1', vehicleId: 'vehicle-1', service: 'area_c', provider: 'Comune di "Milano"', amount: 20, vat: 4, currency: 'EUR', status: 'approved', expenseType: 'business', receiptName: 'receipt.pdf', reviewedByName: 'Admin' },
+	{ id: 'pending', date: '2026-07-11', driverId: 'driver-1', vehicleId: 'vehicle-1', service: 'area_c', provider: 'Comune di Milano', amount: 10, vat: 2, currency: 'EUR', status: 'pending', expenseType: 'personal' },
+	{ id: 'outside', date: '2026-06-30', driverId: 'driver-1', vehicleId: 'vehicle-1', service: 'area_c', provider: 'Comune di Milano', amount: 30, vat: 6, currency: 'EUR', status: 'approved', expenseType: 'personal' },
 ]
 
 describe('reporting', () => {

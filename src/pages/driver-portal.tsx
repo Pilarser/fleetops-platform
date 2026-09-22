@@ -16,7 +16,7 @@ function today() {
 
 function transactionDraft(transaction?: Transaction, service: ServiceType = 'fuel'): DriverTransactionDraft {
 	return transaction
-		? { date: transaction.date, service: transaction.service, provider: transaction.provider, amount: transaction.amount, vat: transaction.vat, expenseType: transaction.expenseType }
+		? { date: transaction.date, service: transaction.service, provider: transaction.provider, amount: transaction.amount, vat: transaction.vat, currency: transaction.currency, expenseType: transaction.expenseType }
 		: { date: today(), service, provider: '', amount: 0, vat: 0, expenseType: 'business' }
 }
 
@@ -193,7 +193,7 @@ export function DriverPortalPage() {
 						<tr key={transaction.id}>
 							<td>{transaction.date}</td><td>{serviceLabel(transaction.service)}</td><td>{transaction.provider}</td>
 							<td><Badge tone={transaction.expenseType === 'personal' ? 'amber' : 'blue'}>{transaction.expenseType}</Badge></td>
-							<td><strong>{formatCurrency(transaction.amount)}</strong></td><td><Badge tone={statusTone(transaction.status)}>{transaction.status}</Badge></td>
+							<td><strong>{formatCurrency(transaction.amount, transaction.currency)}</strong></td><td><Badge tone={statusTone(transaction.status)}>{transaction.status}</Badge></td>
 							<td><Button type="button" variant="ghost" onClick={() => setSelectedTransaction(transaction)}>Details</Button></td>
 						</tr>
 					)} />
@@ -224,7 +224,7 @@ export function DriverPortalPage() {
 			{selectedTransaction ? (
 				<Drawer title="Transaction details" onClose={closeSelectedTransaction}>
 					<div className="detail-list">
-						<Detail label="Date" value={selectedTransaction.date} /><Detail label="Vehicle" value={workspace.vehicle?.plate ?? selectedTransaction.vehicleId} /><Detail label="Service" value={serviceLabel(selectedTransaction.service)} /><Detail label="Provider" value={selectedTransaction.provider} /><Detail label="Expense type" value={selectedTransaction.expenseType} /><Detail label="VAT" value={formatCurrency(selectedTransaction.vat)} /><Detail label="Amount" value={formatCurrency(selectedTransaction.amount)} /><Detail label="Status" value={selectedTransaction.status} />
+						<Detail label="Date" value={selectedTransaction.date} /><Detail label="Vehicle" value={workspace.vehicle?.plate ?? selectedTransaction.vehicleId} /><Detail label="Service" value={serviceLabel(selectedTransaction.service)} /><Detail label="Provider" value={selectedTransaction.provider} /><Detail label="Expense type" value={selectedTransaction.expenseType} /><Detail label="VAT" value={formatCurrency(selectedTransaction.vat, selectedTransaction.currency)} /><Detail label="Amount" value={formatCurrency(selectedTransaction.amount, selectedTransaction.currency)} /><Detail label="Status" value={selectedTransaction.status} />
 						{selectedTransaction.reviewedByName ? <Detail label="Reviewed by" value={selectedTransaction.reviewedByName} /> : null}
 						{selectedTransaction.reviewedAt ? <Detail label="Reviewed at" value={new Date(selectedTransaction.reviewedAt).toLocaleString()} /> : null}
 						{selectedTransaction.rejectionReason ? <Detail label="Rejection reason" value={selectedTransaction.rejectionReason} /> : null}

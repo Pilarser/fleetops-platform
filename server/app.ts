@@ -13,6 +13,7 @@ import {
 	vehiclePayloadSchema,
 } from './schemas'
 import { createFleetStore, type FleetStore } from './storage'
+import { expenseChanges } from '../shared/domain/expenses'
 
 const workspaceRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
 const authenticatedRoles = ['fleet_admin', 'manager', 'finance', 'driver', 'support'] as const
@@ -40,13 +41,6 @@ function transactionEvent(
 		details,
 		createdAt: new Date().toISOString(),
 	}
-}
-
-function transactionChanges(before: Transaction, after: Transaction) {
-	const fields = ['date', 'service', 'provider', 'amount', 'vat', 'expenseType'] as const
-	return Object.fromEntries(fields
-		.filter((field) => before[field] !== after[field])
-		.map((field) => [field, { from: before[field], to: after[field] }]))
 }
 
 function notification(
@@ -214,7 +208,7 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 				const updated = { ...current, ...payload }
 				const saved = await store.updateTransaction(updated)
 				if (saved) {
-					const changes = transactionChanges(current, saved)
+					const changes = expenseChanges(current, saved)
 					if (Object.keys(changes).length > 0) {
 						await store.appendTransactionEvent(transactionEvent(id, driverUser, 'edited', {
 							summary: `${Object.keys(changes).length} expense field${Object.keys(changes).length === 1 ? '' : 's'} updated.`,
@@ -226,10 +220,10 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 				return
 			}
 
-			if (method === 'GET' && url.pathname.startsWith('/api/transactions/') && url.pathname.endsWith('/events')) {
+			if (method === 'GET' && (url.pathname.startsWith('/api/expenses/') || url.pathname.startsWith('/api/transactions/')) && url.pathname.endsWith('/events')) {
 				const user = requireRole(request, response, ['fleet_admin', 'manager', 'finance', 'driver'])
 				if (!user) return
-				const id = decodeURIComponent(url.pathname.slice('/api/transactions/'.length, -'/events'.length))
+				const id = decodeURIComponent(url.pathname.replace(/^\/api\/(expenses|transactions)\//, '').slice(0, -'/events'.length))
 				const transaction = user.role === 'driver'
 					? (await store.getDriverWorkspace(user.id))?.transactions.find((item) => item.id === id)
 					: (await store.getWorkspace()).transactions.find((item) => item.id === id)
@@ -246,6 +240,15 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 					return
 				}
 				sendJson(response, 200, await store.getWorkspace())
+				return
+			}
+
+			if (method === 'GET' && ['/api/fleet', '/api/service-catalog', '/api/expenses'].includes(url.pathname)) {
+				if (!requireRole(request, response, [...workspaceRoles])) return
+				const workspace = await store.getWorkspace()
+				if (url.pathname === '/api/fleet') sendJson(response, 200, { drivers: workspace.drivers, vehicles: workspace.vehicles })
+				if (url.pathname === '/api/service-catalog') sendJson(response, 200, { providers: workspace.providers, services: workspace.services })
+				if (url.pathname === '/api/expenses') sendJson(response, 200, { transactions: workspace.transactions })
 				return
 			}
 
@@ -324,7 +327,7 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 				return
 			}
 
-			if (method === 'POST' && url.pathname === '/api/transactions') {
+			if (method === 'POST' && (url.pathname === '/api/expenses' || url.pathname === '/api/transactions')) {
 				const creator = requireRole(request, response, [...transactionCreateRoles])
 				if (!creator) {
 					return
@@ -358,12 +361,12 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 				return
 			}
 
-			if (method === 'PATCH' && url.pathname.startsWith('/api/transactions/')) {
+			if (method === 'PATCH' && (url.pathname.startsWith('/api/expenses/') || url.pathname.startsWith('/api/transactions/'))) {
 				const reviewer = requireRole(request, response, [...transactionReviewRoles])
 				if (!reviewer) {
 					return
 				}
-				const id = decodeURIComponent(url.pathname.replace('/api/transactions/', ''))
+				const id = decodeURIComponent(url.pathname.replace(/^\/api\/(expenses|transactions)\//, ''))
 				const payload = transactionReviewSchema.parse(await readBody(request))
 				const current = (await store.getWorkspace()).transactions.find((transaction) => transaction.id === id && transaction.status === 'pending')
 				const updatedTransaction = current

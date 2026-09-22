@@ -1,4 +1,4 @@
-import type { AccountLifecycleAction, Driver, DriverTransactionDraft, DriverWorkspace, MobilityService, Notification, ProviderLocation, SessionUser, TeamMember, Transaction, TransactionEvent, Vehicle } from '../types'
+import type { AccountLifecycleAction, Driver, DriverTransactionDraft, DriverWorkspace, ExpenseInput, MobilityService, Notification, ProviderLocation, SessionUser, TeamMember, Transaction, TransactionEvent, Vehicle } from '../types'
 import { supabaseAuth } from './supabase-auth'
 
 export interface FleetWorkspacePayload {
@@ -8,6 +8,10 @@ export interface FleetWorkspacePayload {
 	transactions: Transaction[]
 	vehicles: Vehicle[]
 }
+
+export type FleetInventoryPayload = Pick<FleetWorkspacePayload, 'drivers' | 'vehicles'>
+export type ServiceCatalogPayload = Pick<FleetWorkspacePayload, 'providers' | 'services'>
+export type ExpenseLedgerPayload = Pick<FleetWorkspacePayload, 'transactions'>
 
 const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '')
 let authToken: string | null = localStorage.getItem('fleetos.session.token')
@@ -77,6 +81,9 @@ export const fleetApi = {
 			body: JSON.stringify({ action, redirectUrl }),
 		}),
 	getWorkspace: () => request<FleetWorkspacePayload>('/workspace'),
+	getFleetInventory: () => request<FleetInventoryPayload>('/fleet'),
+	getServiceCatalog: () => request<ServiceCatalogPayload>('/service-catalog'),
+	getExpenseLedger: () => request<ExpenseLedgerPayload>('/expenses'),
 	getDriverWorkspace: () => request<DriverWorkspace>('/driver/workspace'),
 	createDriverTransaction: (transaction: DriverTransactionDraft) =>
 		request<Transaction>('/driver/transactions', { method: 'POST', body: JSON.stringify(transaction) }),
@@ -100,8 +107,8 @@ export const fleetApi = {
 			body: JSON.stringify({ ...metadata, path: upload.path }),
 		})
 	},
-	getReceiptUrl: (transactionId: string) => request<{ url: string; expiresIn: number }>(`/transactions/${transactionId}/receipt`),
-	getTransactionEvents: (transactionId: string) => request<TransactionEvent[]>(`/transactions/${transactionId}/events`),
+	getReceiptUrl: (transactionId: string) => request<{ url: string; expiresIn: number }>(`/expenses/${transactionId}/receipt`),
+	getTransactionEvents: (transactionId: string) => request<TransactionEvent[]>(`/expenses/${transactionId}/events`),
 	getNotifications: () => request<Notification[]>('/notifications'),
 	markNotificationRead: (notificationId: string) => request<Notification>(`/notifications/${notificationId}/read`, { method: 'POST' }),
 	markAllNotificationsRead: () => request<{ ok: true }>('/notifications/read-all', { method: 'POST' }),
@@ -120,8 +127,8 @@ export const fleetApi = {
 			method: 'POST',
 			body: JSON.stringify(vehicle),
 		}),
-	createTransaction: (transaction: Omit<Transaction, 'id' | 'status'>) =>
-		request<Transaction>('/transactions', {
+	createExpense: (transaction: ExpenseInput) =>
+		request<Transaction>('/expenses', {
 			method: 'POST',
 			body: JSON.stringify(transaction),
 		}),
@@ -139,7 +146,7 @@ export const fleetApi = {
 			method: 'PATCH',
 			body: JSON.stringify(vehicle),
 		}),
-	updateTransaction: (
+	reviewExpense: (
 		transactionId: string,
 		review: {
 			status: 'approved' | 'rejected'
@@ -147,7 +154,7 @@ export const fleetApi = {
 			rejectionReason?: string
 		},
 	) =>
-		request<Transaction>(`/transactions/${transactionId}`, {
+		request<Transaction>(`/expenses/${transactionId}`, {
 			method: 'PATCH',
 			body: JSON.stringify(review),
 		}),
