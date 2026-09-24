@@ -4,7 +4,7 @@ import { PrismaClient } from '../src/generated/prisma/client'
 import { providers, services, transactions } from '../src/data/mock-data'
 
 const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL ?? 'postgresql://fleetops:fleetops@localhost:55433/fleetops',
+    connectionString: process.env.DATABASE_URL ?? 'postgresql://onemobility:onemobility@localhost:55433/onemobility',
 })
 
 const prisma = new PrismaClient({ adapter })
@@ -33,11 +33,11 @@ const demoUsers = [
 await prisma.company.upsert({
     where: { id: 'demo-company' },
     update: {
-        name: 'FleetOps Demo',
+        name: 'OneMobility Demo',
     },
     create: {
         id: 'demo-company',
-        name: 'FleetOps Demo',
+        name: 'OneMobility Demo',
         drivers: {
             create: [
                 {

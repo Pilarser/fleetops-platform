@@ -3,6 +3,7 @@ import { Eye, EyeOff, MailCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button, Card, Field, TextInput } from '../components/ui'
 import { useAuth } from '../state/auth'
+import { brand } from '../config/brand'
 
 export function RegisterPage() {
 	const { isRegistering, registerCompany, resendVerification } = useAuth()
@@ -61,10 +62,10 @@ export function RegisterPage() {
 		<main className="login-shell">
 			<Card className="login-card registration-card">
 				<div className="brand login-brand">
-					<div className="brand-mark">FO</div>
+					<div className="brand-mark">{brand.initials}</div>
 					<div>
-						<strong>FleetOS</strong>
-						<span>Mobility control</span>
+						<strong>{brand.name}</strong>
+						<span>{brand.tagline}</span>
 					</div>
 				</div>
 

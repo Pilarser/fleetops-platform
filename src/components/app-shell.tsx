@@ -16,6 +16,7 @@ import { useAuth } from '../state/auth'
 import { hasSupabaseAuth } from '../services/supabase-auth'
 import { NotificationCenter } from './notification-center'
 import { canViewReports } from '../security/permissions'
+import { brand } from '../config/brand'
 
 const navItems = [
 	{ to: '/', label: 'Dashboard', icon: Gauge },
@@ -43,8 +44,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 						<FileText size={22} />
 					</div>
 					<div>
-						<strong>FleetOS</strong>
-						<span>Mobility control</span>
+						<strong>{brand.name}</strong>
+						<span>{brand.tagline}</span>
 					</div>
 				</div>
 

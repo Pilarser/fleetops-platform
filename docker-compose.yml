@@ -1,21 +1,21 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: fleetops-postgres
+    container_name: onemobility-postgres
     environment:
-      POSTGRES_DB: fleetops
-      POSTGRES_USER: fleetops
-      POSTGRES_PASSWORD: fleetops
+      POSTGRES_DB: onemobility
+      POSTGRES_USER: onemobility
+      POSTGRES_PASSWORD: onemobility
     ports:
       - "55433:5432"
     volumes:
-      - fleetops-postgres-data:/var/lib/postgresql/data
+      - onemobility-postgres-data:/var/lib/postgresql/data
       - ./docker/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fleetops -d fleetops"]
+      test: ["CMD-SHELL", "pg_isready -U onemobility -d onemobility"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  fleetops-postgres-data:
+  onemobility-postgres-data:

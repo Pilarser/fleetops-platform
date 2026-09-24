@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { Button, Card, Field, TextInput } from '../components/ui'
 import { useAuth } from '../state/auth'
+import { brand } from '../config/brand'
 
 export function ResetPasswordPage() {
 	const { completePasswordReset } = useAuth()
@@ -29,7 +30,7 @@ export function ResetPasswordPage() {
 	return (
 		<main className="login-shell">
 			<Card className="login-card">
-				<div className="brand login-brand"><div className="brand-mark">FO</div><div><strong>FleetOS</strong><span>Mobility control</span></div></div>
+				<div className="brand login-brand"><div className="brand-mark">{brand.initials}</div><div><strong>{brand.name}</strong><span>{brand.tagline}</span></div></div>
 				<div className="login-copy"><h1>Choose a new password</h1><p>Use at least 8 characters.</p></div>
 				<form className="login-form" onSubmit={handleSubmit}>
 					<Field label="New password">

@@ -12,7 +12,7 @@ const users: Array<SessionUser & { password: string }> = [
 		email: 'admin@example.com',
 		password: 'demo1234',
 		role: 'fleet_admin',
-		companyName: 'FleetOps Demo',
+		companyName: 'OneMobility Demo',
 	},
 	{
 		id: 'user-driver',
@@ -20,7 +20,7 @@ const users: Array<SessionUser & { password: string }> = [
 		email: 'driver@example.com',
 		password: 'demo1234',
 		role: 'driver',
-		companyName: 'FleetOps Demo',
+		companyName: 'OneMobility Demo',
 	},
 ]
 

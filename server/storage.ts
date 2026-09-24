@@ -69,7 +69,7 @@ function readDatabase(databasePath: string) {
 	}
 }
 
-export function createFleetStore(path = resolve(process.env.FLEET_DB_PATH ?? 'server/.data/fleet-db.json')) {
+export function createFleetStore(path = resolve(process.env.ONEMOBILITY_DB_PATH ?? process.env.FLEET_DB_PATH ?? 'server/.data/onemobility-db.json')) {
 	let database = readDatabase(path)
 
 	return {

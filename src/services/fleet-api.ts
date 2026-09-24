@@ -1,3 +1,4 @@
+import { legacyStorageKeys, migrateStorageValue, storageKeys } from '../config/brand'
 import type { AccountLifecycleAction, Driver, DriverTransactionDraft, DriverWorkspace, ExpenseInput, MobilityService, Notification, ProviderLocation, SessionUser, TeamMember, Transaction, TransactionEvent, Vehicle } from '../types'
 import { supabaseAuth } from './supabase-auth'
 
@@ -14,7 +15,7 @@ export type ServiceCatalogPayload = Pick<FleetWorkspacePayload, 'providers' | 's
 export type ExpenseLedgerPayload = Pick<FleetWorkspacePayload, 'transactions'>
 
 const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '')
-let authToken: string | null = localStorage.getItem('fleetos.session.token')
+let authToken: string | null = migrateStorageValue(storageKeys.token, legacyStorageKeys.token)
 
 export class FleetApiError extends Error {
 	constructor(

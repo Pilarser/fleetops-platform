@@ -1,6 +1,6 @@
 # Company Registration
 
-FleetOS allows one verified user to create a company workspace as its first `fleet_admin`. Additional users will join through invitations in the next phase.
+OneMobility allows one verified user to create a company workspace as its first `fleet_admin`. Additional users will join through invitations in the next phase.
 
 ## Supabase Auth configuration
 
@@ -9,13 +9,13 @@ In the Supabase dashboard, open **Authentication > URL Configuration**.
 Set the Site URL to:
 
 ```text
-https://pilarser.github.io/fleetops-platform/
+https://pilarser.github.io/onemobility-platform/
 ```
 
 Add these Redirect URLs:
 
 ```text
-https://pilarser.github.io/fleetops-platform/
+https://pilarser.github.io/onemobility-platform/
 http://localhost:5174/**
 ```
 
@@ -41,4 +41,3 @@ Then commit and push the application changes. The existing GitHub repository var
 5. Confirm that the app opens the new, empty workspace without asking for another login.
 6. In Supabase, verify one new `Company`, one `User` with role `fleet_admin`, and eight company-scoped `MobilityService` rows.
 7. Log out and back in with the new credentials.
-

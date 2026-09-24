@@ -1,10 +1,10 @@
-# Fleet Mobility Platform
+# OneMobility
 
 Frontend-first MVP for a legally distinct fleet mobility management product.
 
 ## Product Purpose
 
-FleetOS helps companies manage fleet mobility from one operations portal: vehicles, drivers, service access, mobility spend, provider coverage, reporting, and approvals. The web app is for fleet/admin/finance users first; a driver-facing mobile or web app can be added later against the same backend.
+OneMobility helps companies manage fleet mobility from one operations portal: vehicles, drivers, service access, mobility spend, provider coverage, reporting, and approvals. The web app is for fleet/admin/finance users first; a driver-facing mobile or web app can be added later against the same backend.
 
 ## Stack
 
@@ -39,7 +39,7 @@ Demo data is seeded from `src/data/mock-data.ts` into Postgres for local backend
 ## Suggested Architecture
 
 ```text
-fleet/
+onemobility/
   src/
     components/       App shell and reusable UI primitives
     data/             Mock data and formatting helpers
@@ -50,7 +50,7 @@ fleet/
 Future backend/mobile structure:
 
 ```text
-fleet/
+onemobility/
   apps/
     web/
     api/

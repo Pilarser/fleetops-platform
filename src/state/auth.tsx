@@ -1,11 +1,9 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react'
+import { legacyStorageKeys, migrateStorageValue, storageKeys } from '../config/brand'
 import { demoUsers } from '../data/demo-users'
 import { FleetApiError, fleetApi, hasFleetApi } from '../services/fleet-api'
 import { hasSupabaseAuth, supabaseAuth } from '../services/supabase-auth'
 import type { SessionUser } from '../types'
-
-const userStorageKey = 'fleetos.session.user'
-const tokenStorageKey = 'fleetos.session.token'
 
 interface AuthState {
 	isAuthenticated: boolean
@@ -34,7 +32,7 @@ interface CompanyRegistration {
 const AuthContext = createContext<AuthState | undefined>(undefined)
 
 function readStoredUser() {
-	const raw = localStorage.getItem(userStorageKey)
+	const raw = migrateStorageValue(storageKeys.user, legacyStorageKeys.user)
 	if (!raw) {
 		return null
 	}
@@ -42,18 +40,20 @@ function readStoredUser() {
 	try {
 		return JSON.parse(raw) as SessionUser
 	} catch {
-		localStorage.removeItem(userStorageKey)
+		localStorage.removeItem(storageKeys.user)
 		return null
 	}
 }
 
 function clearStoredUser() {
-	localStorage.removeItem(userStorageKey)
-	localStorage.removeItem(tokenStorageKey)
+	localStorage.removeItem(storageKeys.user)
+	localStorage.removeItem(storageKeys.token)
+	localStorage.removeItem(legacyStorageKeys.user)
+	localStorage.removeItem(legacyStorageKeys.token)
 }
 
 function storeUser(user: SessionUser) {
-	localStorage.setItem(userStorageKey, JSON.stringify(user))
+	localStorage.setItem(storageKeys.user, JSON.stringify(user))
 }
 
 function authRedirectUrl() {
@@ -104,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			}
 
 			fleetApi.setToken(data.session.access_token)
-			localStorage.removeItem(tokenStorageKey)
+			localStorage.removeItem(storageKeys.token)
 			try {
 				const sessionUser = await loadHostedUser()
 				if (!cancelled) {
@@ -134,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				setMustResetPassword(true)
 			}
 			if (session) {
-				localStorage.removeItem(tokenStorageKey)
+				localStorage.removeItem(storageKeys.token)
 				void loadHostedUser()
 					.then((sessionUser) => {
 						if (!cancelled) {
@@ -194,9 +194,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 							if (error) {
 								throw error
 							}
-							localStorage.removeItem(tokenStorageKey)
+							localStorage.removeItem(storageKeys.token)
 						} else {
-							localStorage.setItem(tokenStorageKey, session.token)
+							localStorage.setItem(storageKeys.token, session.token)
 						}
 						fleetApi.setToken(session.token)
 						storeUser(session.user)

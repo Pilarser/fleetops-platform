@@ -7,7 +7,7 @@ export default defineConfig({
 	retries: process.env.CI ? 2 : 0,
 	reporter: process.env.CI ? 'github' : 'list',
 	use: {
-		baseURL: 'http://127.0.0.1:5176/fleetops-platform/',
+		baseURL: 'http://127.0.0.1:5176/onemobility-platform/',
 		screenshot: 'only-on-failure',
 		trace: 'retain-on-failure',
 	},
@@ -20,7 +20,7 @@ export default defineConfig({
 		},
 		{
 			command: 'VITE_API_URL=http://127.0.0.1:4010/api VITE_SUPABASE_URL= VITE_SUPABASE_PUBLISHABLE_KEY= pnpm exec vite --host 127.0.0.1 --port 5176 --strictPort',
-			url: 'http://127.0.0.1:5176/fleetops-platform/',
+			url: 'http://127.0.0.1:5176/onemobility-platform/',
 			reuseExistingServer: false,
 			timeout: 30_000,
 		},

@@ -3,6 +3,7 @@ import { ArrowLeft, Mail } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button, Card, Field, TextInput } from '../components/ui'
 import { useAuth } from '../state/auth'
+import { brand } from '../config/brand'
 
 export function ForgotPasswordPage() {
 	const { requestPasswordReset } = useAuth()
@@ -29,8 +30,8 @@ export function ForgotPasswordPage() {
 		<main className="login-shell">
 			<Card className="login-card">
 				<div className="brand login-brand">
-					<div className="brand-mark">FO</div>
-					<div><strong>FleetOS</strong><span>Mobility control</span></div>
+					<div className="brand-mark">{brand.initials}</div>
+					<div><strong>{brand.name}</strong><span>{brand.tagline}</span></div>
 				</div>
 				<div className="login-copy">
 					<h1>Reset password</h1>

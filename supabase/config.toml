@@ -1,5 +1,4 @@
-project_id = "fleetops-platform"
+project_id = "onemobility-platform"
 
 [functions.fleet-api]
 verify_jwt = false
-

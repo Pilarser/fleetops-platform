@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Button, Card, Field, TextInput } from '../components/ui'
 import { useAuth } from '../state/auth'
+import { brand } from '../config/brand'
 
 export function SetPasswordPage() {
 	const { completeInvitation, user } = useAuth()
@@ -36,9 +37,9 @@ export function SetPasswordPage() {
 		<main className="login-shell">
 			<Card className="login-card">
 				<div className="brand login-brand">
-					<div className="brand-mark">FO</div>
+					<div className="brand-mark">{brand.initials}</div>
 					<div>
-						<strong>FleetOS</strong>
+						<strong>{brand.name}</strong>
 						<span>{user?.companyName}</span>
 					</div>
 				</div>
