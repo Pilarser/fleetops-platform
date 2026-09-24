@@ -73,7 +73,7 @@ Deno.serve(async (request) => {
 
 	try {
 		if (request.method === 'GET' && path === '/health') {
-			return json({ ok: true, service: 'fleet-api' })
+			return json({ ok: true, service: 'onemobility-api' })
 		}
 
 		if (request.method === 'POST' && path === '/auth/login') {

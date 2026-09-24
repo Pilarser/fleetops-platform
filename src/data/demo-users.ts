@@ -7,11 +7,11 @@ export interface DemoUser extends SessionUser {
 export const demoUsers: DemoUser[] = [
 	{
 		id: 'user-1',
-		name: 'Fleet Manager',
+		name: 'Mobility Manager',
 		email: 'admin@example.com',
 		password: 'demo1234',
 		role: 'fleet_admin',
-		companyName: 'Acme Italia Fleet',
+		companyName: 'OneMobility Demo',
 	},
 	{
 		id: 'user-2',
@@ -19,7 +19,7 @@ export const demoUsers: DemoUser[] = [
 		email: 'finance@example.com',
 		password: 'demo1234',
 		role: 'finance',
-		companyName: 'Acme Italia Fleet',
+		companyName: 'OneMobility Demo',
 	},
 	{
 		id: 'user-3',
@@ -27,6 +27,6 @@ export const demoUsers: DemoUser[] = [
 		email: 'driver@example.com',
 		password: 'demo1234',
 		role: 'driver',
-		companyName: 'Acme Italia Fleet',
+		companyName: 'OneMobility Demo',
 	},
 ]

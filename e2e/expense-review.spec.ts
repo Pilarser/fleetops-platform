@@ -21,7 +21,7 @@ test('driver submission reaches admin review and returns an approval notificatio
 	await page.getByRole('button', { name: 'Logout' }).click()
 
 	await login(page, 'admin@example.com')
-	await expect(page.getByRole('heading', { name: 'Fleet dashboard' })).toBeVisible()
+	await expect(page.getByRole('heading', { name: 'OneMobility dashboard' })).toBeVisible()
 	await page.getByRole('button', { name: /Notifications, 1 unread/ }).click()
 	await expect(page.getByText('Expense awaiting review')).toBeVisible()
 	await expect(page.getByText('Driver User submitted an expense for review.')).toBeVisible()

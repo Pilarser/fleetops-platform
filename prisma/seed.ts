@@ -208,6 +208,6 @@ for (const transaction of transactions) {
     })
 }
 
-console.log('Seeded demo fleet data.')
+console.log('Seeded OneMobility demo data.')
 
 await prisma.$disconnect()

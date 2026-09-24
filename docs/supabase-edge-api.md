@@ -31,7 +31,7 @@ curl https://nzodcewdwgonzbrjrxyl.supabase.co/functions/v1/fleet-api/health
 Expected response:
 
 ```json
-{"ok":true,"service":"fleet-api"}
+{"ok":true,"service":"onemobility-api"}
 ```
 
 ## Connect GitHub Pages

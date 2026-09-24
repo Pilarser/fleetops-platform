@@ -2,7 +2,7 @@ import { legacyStorageKeys, migrateStorageValue, storageKeys } from '../config/b
 import type { AccountLifecycleAction, Driver, DriverTransactionDraft, DriverWorkspace, ExpenseInput, MobilityService, Notification, ProviderLocation, SessionUser, TeamMember, Transaction, TransactionEvent, Vehicle } from '../types'
 import { supabaseAuth } from './supabase-auth'
 
-export interface FleetWorkspacePayload {
+export interface WorkspacePayload {
 	drivers: Driver[]
 	providers: ProviderLocation[]
 	services: MobilityService[]
@@ -10,14 +10,14 @@ export interface FleetWorkspacePayload {
 	vehicles: Vehicle[]
 }
 
-export type FleetInventoryPayload = Pick<FleetWorkspacePayload, 'drivers' | 'vehicles'>
-export type ServiceCatalogPayload = Pick<FleetWorkspacePayload, 'providers' | 'services'>
-export type ExpenseLedgerPayload = Pick<FleetWorkspacePayload, 'transactions'>
+export type VehicleInventoryPayload = Pick<WorkspacePayload, 'drivers' | 'vehicles'>
+export type ServiceCatalogPayload = Pick<WorkspacePayload, 'providers' | 'services'>
+export type ExpenseLedgerPayload = Pick<WorkspacePayload, 'transactions'>
 
 const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '')
 let authToken: string | null = migrateStorageValue(storageKeys.token, legacyStorageKeys.token)
 
-export class FleetApiError extends Error {
+export class PlatformApiError extends Error {
 	constructor(
 		public readonly status: number,
 		message: string,
@@ -26,13 +26,13 @@ export class FleetApiError extends Error {
 	}
 }
 
-export function hasFleetApi() {
+export function hasPlatformApi() {
 	return Boolean(apiBaseUrl)
 }
 
 async function request<T>(path: string, options?: RequestInit) {
 	if (!apiBaseUrl) {
-		throw new Error('Fleet API URL is not configured')
+		throw new Error('OneMobility API URL is not configured')
 	}
 
 	const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -49,16 +49,16 @@ async function request<T>(path: string, options?: RequestInit) {
 			| { message?: string; issues?: Array<{ message?: string }> }
 			| null
 		const issueMessage = payload?.issues?.find((issue) => issue.message)?.message
-		throw new FleetApiError(
+		throw new PlatformApiError(
 			response.status,
-			issueMessage ?? payload?.message ?? `Fleet API request failed with ${response.status}`,
+			issueMessage ?? payload?.message ?? `OneMobility API request failed with ${response.status}`,
 		)
 	}
 
 	return (await response.json()) as T
 }
 
-export const fleetApi = {
+export const platformApi = {
 	setToken: (token: string | null) => {
 		authToken = token
 	},
@@ -81,8 +81,8 @@ export const fleetApi = {
 			method: 'POST',
 			body: JSON.stringify({ action, redirectUrl }),
 		}),
-	getWorkspace: () => request<FleetWorkspacePayload>('/workspace'),
-	getFleetInventory: () => request<FleetInventoryPayload>('/fleet'),
+	getWorkspace: () => request<WorkspacePayload>('/workspace'),
+	getVehicleInventory: () => request<VehicleInventoryPayload>('/fleet'),
 	getServiceCatalog: () => request<ServiceCatalogPayload>('/service-catalog'),
 	getExpenseLedger: () => request<ExpenseLedgerPayload>('/expenses'),
 	getDriverWorkspace: () => request<DriverWorkspace>('/driver/workspace'),

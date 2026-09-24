@@ -6,11 +6,11 @@ import {
 	transactions as initialTransactions,
 	vehicles as initialVehicles,
 } from '../data/mock-data'
-import { fleetApi, hasFleetApi, type FleetWorkspacePayload } from '../services/fleet-api'
+import { hasPlatformApi, platformApi, type WorkspacePayload } from '../services/platform-api'
 import type { Driver, ExpenseInput, MobilityService, ProviderLocation, Transaction, Vehicle } from '../types'
-import { applyDriverAssignment, applyDriverToVehicles, assignVehicleDriver } from '../../shared/domain/fleet'
+import { applyDriverAssignment, applyDriverToVehicles, assignVehicleDriver } from '../../shared/domain/vehicle-assignments'
 
-interface FleetWorkspaceState {
+interface WorkspaceState {
 	apiMode: 'connected' | 'local'
 	drivers: Driver[]
 	isLoading: boolean
@@ -37,14 +37,14 @@ interface FleetWorkspaceState {
 	inviteDriver: (driverId: string) => Promise<void>
 }
 
-const FleetWorkspaceContext = createContext<FleetWorkspaceState | undefined>(undefined)
+const WorkspaceContext = createContext<WorkspaceState | undefined>(undefined)
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now()}`
 }
 
-export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
-	const isConnected = hasFleetApi()
+export function WorkspaceProvider({ children }: { children: ReactNode }) {
+	const isConnected = hasPlatformApi()
 	const apiMode = isConnected ? 'connected' : 'local'
 	const [drivers, setDrivers] = useState<Driver[]>(() => (isConnected ? [] : initialDrivers))
 	const [providers, setProviders] = useState<ProviderLocation[]>(() => (isConnected ? [] : initialProviders))
@@ -54,7 +54,7 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 	const [isLoading, setIsLoading] = useState(isConnected)
 	const [loadError, setLoadError] = useState<string | null>(null)
 
-	const applyWorkspace = useCallback((workspace: FleetWorkspacePayload) => {
+	const applyWorkspace = useCallback((workspace: WorkspacePayload) => {
 		setDrivers(workspace.drivers)
 		setProviders(workspace.providers)
 		setServices(workspace.services)
@@ -70,14 +70,14 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 		setIsLoading(true)
 		setLoadError(null)
 		try {
-			const [fleet, catalog, ledger] = await Promise.all([
-				fleetApi.getFleetInventory(),
-				fleetApi.getServiceCatalog(),
-				fleetApi.getExpenseLedger(),
+			const [inventory, catalog, ledger] = await Promise.all([
+				platformApi.getVehicleInventory(),
+				platformApi.getServiceCatalog(),
+				platformApi.getExpenseLedger(),
 			])
-			applyWorkspace({ ...fleet, ...catalog, ...ledger })
+			applyWorkspace({ ...inventory, ...catalog, ...ledger })
 		} catch (error) {
-			setLoadError(error instanceof Error ? error.message : 'Unable to load the fleet workspace')
+			setLoadError(error instanceof Error ? error.message : 'Unable to load the mobility workspace')
 		} finally {
 			setIsLoading(false)
 		}
@@ -88,15 +88,15 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 	}, [reloadWorkspace])
 
 	async function refreshWorkspace() {
-		const [fleet, catalog, ledger] = await Promise.all([
-			fleetApi.getFleetInventory(),
-			fleetApi.getServiceCatalog(),
-			fleetApi.getExpenseLedger(),
+		const [inventory, catalog, ledger] = await Promise.all([
+			platformApi.getVehicleInventory(),
+			platformApi.getServiceCatalog(),
+			platformApi.getExpenseLedger(),
 		])
-		applyWorkspace({ ...fleet, ...catalog, ...ledger })
+		applyWorkspace({ ...inventory, ...catalog, ...ledger })
 	}
 
-	const value = useMemo<FleetWorkspaceState>(
+	const value = useMemo<WorkspaceState>(
 		() => ({
 			apiMode,
 			drivers,
@@ -108,8 +108,8 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 			vehicles,
 			reloadWorkspace,
 			createDriver: async (driver) => {
-				if (hasFleetApi()) {
-					const created = await fleetApi.createDriver(driver)
+				if (hasPlatformApi()) {
+					const created = await platformApi.createDriver(driver)
 					await refreshWorkspace()
 					return created
 				}
@@ -125,16 +125,16 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				return createdDriver
 			},
 			inviteDriver: async (driverId) => {
-				if (!hasFleetApi()) {
+				if (!hasPlatformApi()) {
 					throw new Error('Driver invitations require the hosted API')
 				}
 				const redirectUrl = new URL(import.meta.env.BASE_URL, window.location.origin).toString()
-				await fleetApi.inviteDriver(driverId, redirectUrl)
+				await platformApi.inviteDriver(driverId, redirectUrl)
 				await refreshWorkspace()
 			},
 			createVehicle: async (vehicle) => {
-				if (hasFleetApi()) {
-					await fleetApi.createVehicle(vehicle)
+				if (hasPlatformApi()) {
+					await platformApi.createVehicle(vehicle)
 					await refreshWorkspace()
 					return
 				}
@@ -148,8 +148,8 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				setVehicles((current) => [...current, createdVehicle])
 			},
 			createTransaction: async (transaction) => {
-				if (hasFleetApi()) {
-					const created = await fleetApi.createExpense(transaction)
+				if (hasPlatformApi()) {
+					const created = await platformApi.createExpense(transaction)
 					setTransactions((current) => [created, ...current])
 					return created
 				}
@@ -164,8 +164,8 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				return created
 			},
 			updateDriver: async (driver) => {
-				if (hasFleetApi()) {
-					await fleetApi.updateDriver(driver)
+				if (hasPlatformApi()) {
+					await platformApi.updateDriver(driver)
 					await refreshWorkspace()
 					return
 				}
@@ -173,8 +173,8 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				setVehicles((current) => applyDriverToVehicles(current, driver))
 			},
 			updateVehicle: async (vehicle) => {
-				if (hasFleetApi()) {
-					await fleetApi.updateVehicle(vehicle)
+				if (hasPlatformApi()) {
+					await platformApi.updateVehicle(vehicle)
 					await refreshWorkspace()
 					return
 				}
@@ -182,8 +182,8 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				setVehicles((current) => current.map((item) => (item.id === vehicle.id ? vehicle : item)))
 			},
 			updateTransaction: async (transactionId, review) => {
-				if (hasFleetApi()) {
-					const updated = await fleetApi.reviewExpense(transactionId, review)
+				if (hasPlatformApi()) {
+					const updated = await platformApi.reviewExpense(transactionId, review)
 					setTransactions((current) => current.map((item) => (item.id === transactionId ? updated : item)))
 					return updated
 				}
@@ -197,8 +197,8 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 				return updated
 			},
 			toggleService: async (serviceId) => {
-				if (hasFleetApi()) {
-					const updatedService = await fleetApi.toggleService(serviceId)
+				if (hasPlatformApi()) {
+					const updatedService = await platformApi.toggleService(serviceId)
 					setServices((current) => current.map((service) => (service.id === serviceId ? updatedService : service)))
 					return
 				}
@@ -211,13 +211,13 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 		[apiMode, drivers, isLoading, loadError, providers, reloadWorkspace, services, transactions, vehicles],
 	)
 
-	return <FleetWorkspaceContext.Provider value={value}>{children}</FleetWorkspaceContext.Provider>
+	return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }
 
-export function useFleetWorkspace() {
-	const context = useContext(FleetWorkspaceContext)
+export function useWorkspace() {
+	const context = useContext(WorkspaceContext)
 	if (!context) {
-		throw new Error('useFleetWorkspace must be used inside FleetWorkspaceProvider')
+		throw new Error('useWorkspace must be used inside WorkspaceProvider')
 	}
 	return context
 }

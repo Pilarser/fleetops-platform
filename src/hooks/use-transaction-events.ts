@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fleetApi } from '../services/fleet-api'
+import { platformApi } from '../services/platform-api'
 import type { TransactionEvent } from '../types'
 
 export function useTransactionEvents(transactionId?: string, refreshKey?: string) {
@@ -17,7 +17,7 @@ export function useTransactionEvents(transactionId?: string, refreshKey?: string
 		let active = true
 		setIsLoading(true)
 		setError('')
-		fleetApi.getTransactionEvents(transactionId)
+		platformApi.getTransactionEvents(transactionId)
 			.then((history) => {
 				if (active) setEvents(history)
 			})

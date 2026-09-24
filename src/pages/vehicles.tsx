@@ -3,7 +3,7 @@ import { LoaderCircle, Plus } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput, Toolbar } from '../components/ui'
 import { formatCurrency, formatNumber } from '../data/formatters'
-import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useWorkspace } from '../state/workspace'
 import { useAuth } from '../state/auth'
 import { canManageFleet } from '../security/permissions'
 import type { Vehicle } from '../types'
@@ -24,7 +24,7 @@ const emptyVehicleForm: VehicleFormState = {
 
 export function VehiclesPage() {
 	const { user } = useAuth()
-	const { createVehicle, drivers, updateVehicle, vehicles } = useFleetWorkspace()
+	const { createVehicle, drivers, updateVehicle, vehicles } = useWorkspace()
 	const canManage = canManageFleet(user?.role)
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [query, setQuery] = useState('')
@@ -104,7 +104,7 @@ export function VehiclesPage() {
 				) : (
 					<EmptyState
 						title="No vehicles found"
-						detail="Add the first vehicle to start this fleet."
+						detail="Add the first vehicle to start this inventory."
 						action={canManage ? <Button type="button" onClick={() => setIsCreating(true)}><Plus size={16} /> Add vehicle</Button> : undefined}
 					/>
 				)}
@@ -148,7 +148,7 @@ function VehicleDialog({
 	title,
 	vehicle,
 }: {
-	drivers: ReturnType<typeof useFleetWorkspace>['drivers']
+	drivers: ReturnType<typeof useWorkspace>['drivers']
 	onClose: () => void
 	onSubmit: (vehicle: VehicleFormState) => Promise<void>
 	title: string

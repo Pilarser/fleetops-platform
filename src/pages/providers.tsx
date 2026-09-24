@@ -1,9 +1,9 @@
 import { Badge, Card, PageHeader, Table } from '../components/ui'
-import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useWorkspace } from '../state/workspace'
 import { getServiceLabel, statusTone } from './helpers'
 
 export function ProvidersPage() {
-	const { providers, services } = useFleetWorkspace()
+	const { providers, services } = useWorkspace()
 
 	return (
 		<>

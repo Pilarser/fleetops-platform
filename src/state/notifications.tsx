@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { fleetApi, hasFleetApi } from '../services/fleet-api'
+import { platformApi, hasPlatformApi } from '../services/platform-api'
 import type { Notification } from '../types'
 
 interface NotificationState {
@@ -18,10 +18,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 	const [isLoading, setIsLoading] = useState(false)
 
 	const reload = useCallback(async () => {
-		if (!hasFleetApi()) return
+		if (!hasPlatformApi()) return
 		setIsLoading(true)
 		try {
-			setNotifications(await fleetApi.getNotifications())
+			setNotifications(await platformApi.getNotifications())
 		} catch {
 			// Keep the latest successful notification snapshot during transient API failures.
 		} finally {
@@ -41,11 +41,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 		isLoading,
 		reload,
 		markRead: async (notificationId) => {
-			const updated = await fleetApi.markNotificationRead(notificationId)
+			const updated = await platformApi.markNotificationRead(notificationId)
 			setNotifications((current) => current.map((notification) => notification.id === updated.id ? updated : notification))
 		},
 		markAllRead: async () => {
-			await fleetApi.markAllNotificationsRead()
+			await platformApi.markAllNotificationsRead()
 			const readAt = new Date().toISOString()
 			setNotifications((current) => current.map((notification) => notification.readAt ? notification : { ...notification, readAt }))
 		},

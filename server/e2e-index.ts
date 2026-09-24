@@ -1,14 +1,14 @@
 import { rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { SessionUser } from '../src/types'
-import { createFleetServer } from './app'
-import { createFleetStore } from './storage'
+import { createApiServer } from './app'
+import { createWorkspaceStore } from './storage'
 
-const databasePath = resolve('server/.data/e2e-fleet-db.json')
+const databasePath = resolve('server/.data/e2e-onemobility-db.json')
 const users: Array<SessionUser & { password: string }> = [
 	{
 		id: 'user-admin',
-		name: 'Fleet Manager',
+		name: 'Mobility Manager',
 		email: 'admin@example.com',
 		password: 'demo1234',
 		role: 'fleet_admin',
@@ -26,9 +26,9 @@ const users: Array<SessionUser & { password: string }> = [
 
 rmSync(databasePath, { force: true })
 
-createFleetServer(createFleetStore(databasePath), {
+createApiServer(createWorkspaceStore(databasePath), {
 	findUser: async (email, password) => users.find((user) =>
 		user.email === email.trim().toLowerCase() && user.password === password),
 }).listen(4010, '127.0.0.1', () => {
-	console.log('Fleet E2E API listening on http://127.0.0.1:4010')
+	console.log('OneMobility E2E API listening on http://127.0.0.1:4010')
 })

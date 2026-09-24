@@ -12,7 +12,7 @@ import {
 	transactionReviewSchema,
 	vehiclePayloadSchema,
 } from './schemas'
-import { createFleetStore, type FleetStore } from './storage'
+import { createWorkspaceStore, type WorkspaceStore } from './storage'
 import { expenseChanges } from '../shared/domain/expenses'
 
 const workspaceRoles = ['fleet_admin', 'manager', 'finance', 'support'] as const
@@ -53,7 +53,7 @@ function notification(
 	return { id: `notification-${randomUUID()}`, userId, transactionId, type, title, message, readAt: null, createdAt: new Date().toISOString() }
 }
 
-export function createFleetServer(store: FleetStore = createFleetStore(), authProvider: AuthProvider = prismaAuthProvider) {
+export function createApiServer(store: WorkspaceStore = createWorkspaceStore(), authProvider: AuthProvider = prismaAuthProvider) {
 	return createServer(async (request, response) => {
 		const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
 		const method = request.method ?? 'GET'
@@ -67,7 +67,7 @@ export function createFleetServer(store: FleetStore = createFleetStore(), authPr
 			if (method === 'GET' && url.pathname === '/api/health') {
 				sendJson(response, 200, {
 					ok: true,
-					service: 'fleet-api',
+					service: 'onemobility-api',
 				})
 				return
 			}

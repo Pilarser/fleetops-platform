@@ -1,3 +1,4 @@
+/** Shared invariants for the current vehicle-to-driver assignment model. */
 export interface AssignableDriver {
 	id: string
 	vehicleId: string

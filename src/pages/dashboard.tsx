@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom'
 import { formatCurrency } from '../data/formatters'
 import { Badge, Card, MetricCard, PageHeader, Table } from '../components/ui'
 import { getDriverName, getServiceLabel, getVehiclePlate, statusTone } from './helpers'
-import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useWorkspace } from '../state/workspace'
 import { useAuth } from '../state/auth'
 import { canManageFleet, canReviewTransaction } from '../security/permissions'
 
 export function DashboardPage() {
 	const { user } = useAuth()
-	const { drivers, isLoading, services, transactions, vehicles } = useFleetWorkspace()
+	const { drivers, isLoading, services, transactions, vehicles } = useWorkspace()
 	const canManage = canManageFleet(user?.role)
 	const canReview = canReviewTransaction(user?.role)
 	const monthlySpend = transactions.filter((transaction) => transaction.status !== 'withdrawn').reduce((total, transaction) => total + transaction.amount, 0)
@@ -27,7 +27,7 @@ export function DashboardPage() {
 		{
 			complete: hasVehicle,
 			label: 'Add a vehicle',
-			detail: hasVehicle ? `${vehicles.length} in fleet` : 'Fleet inventory',
+			detail: hasVehicle ? `${vehicles.length} vehicles tracked` : 'Vehicle inventory',
 			to: '/vehicles?create=1',
 			action: 'Add vehicle',
 		},
@@ -59,7 +59,7 @@ export function DashboardPage() {
 	return (
 		<>
 			<PageHeader
-				title="Fleet dashboard"
+				title="OneMobility dashboard"
 				description="Monitor mobility spend, active vehicles, driver usage, and pending actions."
 			/>
 
@@ -122,7 +122,7 @@ export function DashboardPage() {
 
 			<Card className="review-queue">
 				<div className="section-heading">
-					<div><h2>Review queue</h2><p>Pending expenses requiring a fleet or finance decision.</p></div>
+					<div><h2>Review queue</h2><p>Pending expenses requiring an operations or finance decision.</p></div>
 					{reviewQueue.length > 0 ? <Link className="setup-action" to="/transactions?status=pending">{canReview ? 'Review all' : 'View all'} <ArrowRight size={15} /></Link> : null}
 				</div>
 				<div className="review-summary">

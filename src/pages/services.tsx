@@ -1,12 +1,12 @@
 import { Badge, Button, Card, PageHeader } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
-import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useWorkspace } from '../state/workspace'
 import { useAuth } from '../state/auth'
 import { canManageFleet } from '../security/permissions'
 
 export function ServicesPage() {
 	const { user } = useAuth()
-	const { services, toggleService } = useFleetWorkspace()
+	const { services, toggleService } = useWorkspace()
 	const canManage = canManageFleet(user?.role)
 
 	return (

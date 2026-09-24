@@ -4,15 +4,15 @@ import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Notification, SessionUser, Transaction, TransactionEvent } from '../src/types'
-import { createFleetServer } from './app'
-import { createFleetStore } from './storage'
+import { createApiServer } from './app'
+import { createWorkspaceStore } from './storage'
 
-const tempDir = mkdtempSync(join(tmpdir(), 'fleet-api-'))
-const store = createFleetStore(join(tempDir, 'fleet-db.json'))
+const tempDir = mkdtempSync(join(tmpdir(), 'onemobility-api-'))
+const store = createWorkspaceStore(join(tempDir, 'workspace-db.json'))
 const testUsers: SessionUser[] = [
 	{
 		id: 'user-admin',
-		name: 'Fleet Manager',
+		name: 'Mobility Manager',
 		email: 'admin@example.com',
 		role: 'fleet_admin',
 		companyName: 'OneMobility Demo',
@@ -33,7 +33,7 @@ const testUsers: SessionUser[] = [
 	},
 	{
 		id: 'user-manager',
-		name: 'Fleet Manager',
+		name: 'Mobility Manager',
 		email: 'manager@example.com',
 		role: 'manager',
 		companyName: 'OneMobility Demo',
@@ -54,7 +54,7 @@ const testUsers: SessionUser[] = [
 		membershipStatus: 'invited',
 	},
 ]
-const server = createFleetServer(store, {
+const server = createApiServer(store, {
 	findUser: async (email, password) => {
 		if (password !== 'demo1234') {
 			return undefined
@@ -115,7 +115,7 @@ async function getNotifications(token: string) {
 	return (await response.json()) as Notification[]
 }
 
-describe('fleet API', () => {
+describe('OneMobility API', () => {
 	it('rejects unauthenticated workspace access', async () => {
 		const response = await fetch(`${baseUrl}/api/workspace`)
 		assert.equal(response.status, 401)
@@ -324,7 +324,7 @@ describe('fleet API', () => {
 		assert.equal(reviewed?.status, 'approved')
 		assert.equal(reviewed?.expenseType, 'personal')
 		assert.equal(reviewed?.reviewedById, 'user-admin')
-		assert.equal(reviewed?.reviewedByName, 'Fleet Manager')
+		assert.equal(reviewed?.reviewedByName, 'Mobility Manager')
 		assert.ok(reviewed?.reviewedAt)
 		assert.equal(reviewed?.rejectionReason, null)
 
@@ -390,7 +390,7 @@ describe('fleet API', () => {
 		assert.equal(rejected.rejectionReason, 'Receipt does not match the submitted amount')
 	})
 
-	it('rejects transactions with fleet references that do not exist', async () => {
+	it('rejects transactions with vehicle or driver references that do not exist', async () => {
 		const token = await login()
 		const response = await fetch(`${baseUrl}/api/transactions`, {
 			method: 'POST',
@@ -450,7 +450,7 @@ describe('fleet API', () => {
 		}
 	})
 
-	it('allows finance to work with transactions but not fleet setup', async () => {
+	it('allows finance to work with transactions but not operations setup', async () => {
 		const token = await login('finance@example.com')
 		const workspace = await getWorkspace(token)
 		const response = await fetch(`${baseUrl}/api/transactions`, {
@@ -469,12 +469,12 @@ describe('fleet API', () => {
 		})
 		assert.equal(response.status, 201)
 
-		const fleetMutation = await fetch(`${baseUrl}/api/drivers`, {
+		const setupMutation = await fetch(`${baseUrl}/api/drivers`, {
 			method: 'POST',
 			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
 			body: JSON.stringify({}),
 		})
-		assert.equal(fleetMutation.status, 403)
+		assert.equal(setupMutation.status, 403)
 	})
 
 	it('blocks invited accounts from data routes until activation', async () => {

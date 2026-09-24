@@ -66,7 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 				<header className="topbar">
 					<div>
 						<span className="topbar-label">Workspace</span>
-						<strong>{user?.companyName ?? 'Fleet workspace'}</strong>
+						<strong>{user?.companyName ?? 'Mobility workspace'}</strong>
 					</div>
 					<div className="topbar-user">
 						<NotificationCenter />

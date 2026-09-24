@@ -92,7 +92,7 @@ export function RegisterPage() {
 					<>
 						<div className="login-copy">
 							<h1>Create company</h1>
-							<p>Set up the first administrator account for your fleet workspace.</p>
+							<p>Set up the first administrator account for your mobility workspace.</p>
 						</div>
 						<form className="login-form" onSubmit={handleSubmit}>
 							<div className="registration-grid">

@@ -1,7 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { LoaderCircle, RotateCw, UserCheck, UserPlus, UserX, XCircle } from 'lucide-react'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput } from '../components/ui'
-import { fleetApi } from '../services/fleet-api'
+import { platformApi } from '../services/platform-api'
 import { useAuth } from '../state/auth'
 import type { AccountLifecycleAction } from '../types'
 import type { TeamMember } from '../types'
@@ -33,7 +33,7 @@ export function TeamPage() {
 	async function loadMembers() {
 		setLoadError('')
 		try {
-			setMembers(await fleetApi.getTeam())
+			setMembers(await platformApi.getTeam())
 		} catch (error) {
 			setLoadError(error instanceof Error ? error.message : 'Unable to load team members')
 		} finally {
@@ -52,7 +52,7 @@ export function TeamPage() {
 		setActionError('')
 		setPendingAction(`${member.id}:${action}`)
 		try {
-			await fleetApi.manageAccount(member.id, action, action === 'resend_invitation' ? invitationRedirectUrl() : undefined)
+			await platformApi.manageAccount(member.id, action, action === 'resend_invitation' ? invitationRedirectUrl() : undefined)
 			await loadMembers()
 		} catch (error) {
 			setActionError(error instanceof Error ? error.message : 'Unable to update the account')
@@ -72,7 +72,7 @@ export function TeamPage() {
 		setInviteError('')
 		setIsInviting(true)
 		try {
-			const member = await fleetApi.inviteTeamMember({
+			const member = await platformApi.inviteTeamMember({
 				...form,
 				name: form.name.trim(),
 				email: form.email.trim().toLowerCase(),

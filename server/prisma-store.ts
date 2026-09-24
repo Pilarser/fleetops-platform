@@ -22,7 +22,7 @@ import type {
 	Vehicle as PrismaVehicle,
 } from '../src/generated/prisma/client'
 import { prisma } from './prisma'
-import type { FleetStore } from './storage'
+import type { WorkspaceStore } from './storage'
 
 const companyId = 'demo-company'
 
@@ -187,7 +187,7 @@ async function ensureCompany() {
 	})
 }
 
-export function createPrismaFleetStore(): FleetStore {
+export function createPrismaWorkspaceStore(): WorkspaceStore {
 	return {
 		path: process.env.DATABASE_URL ?? 'postgresql://onemobility:onemobility@localhost:55433/onemobility',
 		getWorkspace: async () => {

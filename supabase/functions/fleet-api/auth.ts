@@ -166,14 +166,14 @@ export async function login(emailValue: string, password: string) {
 			throw new ApiError(403, 'User profile is not configured')
 		}
 		if (profile.status === 'disabled') {
-			throw new ApiError(403, 'This account has been disabled. Contact your fleet administrator.')
+			throw new ApiError(403, 'This account has been disabled. Contact your workspace administrator.')
 		}
 		return { profile, session: directLogin.data.session }
 	}
 
 	const emailProfile = await findProfileByEmail(email)
 	if (emailProfile?.status === 'disabled') {
-		throw new ApiError(403, 'This account has been disabled. Contact your fleet administrator.')
+		throw new ApiError(403, 'This account has been disabled. Contact your workspace administrator.')
 	}
 	throw new ApiError(401, 'Invalid email or password')
 }
@@ -423,7 +423,7 @@ export async function requireSession(request: Request) {
 		throw new ApiError(403, 'User profile is not configured')
 	}
 	if (profile.status === 'disabled') {
-		throw new ApiError(403, 'This account has been disabled. Contact your fleet administrator.')
+		throw new ApiError(403, 'This account has been disabled. Contact your workspace administrator.')
 	}
 	return profile
 }

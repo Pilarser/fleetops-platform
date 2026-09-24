@@ -12,7 +12,7 @@ import {
 	summarizeReport,
 } from '../data/reporting'
 import { useAuth } from '../state/auth'
-import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useWorkspace } from '../state/workspace'
 import { canViewReports } from '../security/permissions'
 
 type PeriodMode = 'month' | 'custom'
@@ -39,7 +39,7 @@ function monthRange(month: string) {
 
 export function ReportsPage() {
 	const { user } = useAuth()
-	const { drivers, services, transactions, vehicles } = useFleetWorkspace()
+	const { drivers, services, transactions, vehicles } = useWorkspace()
 	const latestDate = [...transactions].sort((left, right) => right.date.localeCompare(left.date))[0]?.date ?? currentDate()
 	const earliestDate = [...transactions].sort((left, right) => left.date.localeCompare(right.date))[0]?.date ?? latestDate
 	const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
@@ -71,7 +71,7 @@ export function ReportsPage() {
 	if (!canViewReports(user?.role)) {
 		return (
 			<>
-				<PageHeader title="Reports" description="Financial reporting is available to fleet, management, and finance roles." />
+				<PageHeader title="Reports" description="Financial reporting is available to operations, management, and finance roles." />
 				<Card><EmptyState title="Access restricted" detail="Your account does not have access to financial reports." /></Card>
 			</>
 		)
@@ -84,7 +84,7 @@ export function ReportsPage() {
 		const url = URL.createObjectURL(blob)
 		const anchor = document.createElement('a')
 		anchor.href = url
-		anchor.download = `fleet-report-${range.from}-${range.to}.csv`
+		anchor.download = `onemobility-report-${range.from}-${range.to}.csv`
 		anchor.click()
 		URL.revokeObjectURL(url)
 	}

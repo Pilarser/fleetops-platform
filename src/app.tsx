@@ -17,7 +17,7 @@ import { DriverPortalPage } from './pages/driver-portal'
 import { ForgotPasswordPage } from './pages/forgot-password'
 import { ResetPasswordPage } from './pages/reset-password'
 import { AuthProvider, useAuth } from './state/auth'
-import { FleetWorkspaceProvider, useFleetWorkspace } from './state/fleet-workspace'
+import { WorkspaceProvider, useWorkspace } from './state/workspace'
 import { Button } from './components/ui'
 import { NotificationProvider } from './state/notifications'
 
@@ -64,15 +64,15 @@ function AuthenticatedApp() {
 
 	return (
 		<NotificationProvider>
-			<FleetWorkspaceProvider>
+			<WorkspaceProvider>
 				<WorkspaceApp />
-			</FleetWorkspaceProvider>
+			</WorkspaceProvider>
 		</NotificationProvider>
 	)
 }
 
 function WorkspaceApp() {
-	const { isLoading, loadError, reloadWorkspace } = useFleetWorkspace()
+	const { isLoading, loadError, reloadWorkspace } = useWorkspace()
 
 	return (
 		<AppShell>

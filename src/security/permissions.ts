@@ -1,10 +1,10 @@
 import type { UserRole } from '../types'
 
-const fleetManagers: UserRole[] = ['fleet_admin', 'manager']
+const operationsManagers: UserRole[] = ['fleet_admin', 'manager']
 const transactionOperators: UserRole[] = ['fleet_admin', 'manager', 'finance']
 
 export function canManageFleet(role?: UserRole) {
-	return Boolean(role && fleetManagers.includes(role))
+	return Boolean(role && operationsManagers.includes(role))
 }
 
 export function canCreateTransaction(role?: UserRole) {

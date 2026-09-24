@@ -1,7 +1,7 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react'
 import { legacyStorageKeys, migrateStorageValue, storageKeys } from '../config/brand'
 import { demoUsers } from '../data/demo-users'
-import { FleetApiError, fleetApi, hasFleetApi } from '../services/fleet-api'
+import { PlatformApiError, platformApi, hasPlatformApi } from '../services/platform-api'
 import { hasSupabaseAuth, supabaseAuth } from '../services/supabase-auth'
 import type { SessionUser } from '../types'
 
@@ -62,17 +62,17 @@ function authRedirectUrl() {
 
 async function loadHostedUser() {
 	try {
-		return await fleetApi.me()
+		return await platformApi.me()
 	} catch (error) {
-		if (error instanceof FleetApiError && error.status === 403) {
-			return fleetApi.completeRegistration()
+		if (error instanceof PlatformApiError && error.status === 403) {
+			return platformApi.completeRegistration()
 		}
 		throw error
 	}
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-	const usesHostedAuth = hasFleetApi() && hasSupabaseAuth()
+	const usesHostedAuth = hasPlatformApi() && hasSupabaseAuth()
 	const [user, setUser] = useState<SessionUser | null>(() => (usesHostedAuth ? null : readStoredUser()))
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
 	const [isInitializing, setIsInitializing] = useState(usesHostedAuth)
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				return
 			}
 			if (!data.session) {
-				fleetApi.setToken(null)
+				platformApi.setToken(null)
 				clearStoredUser()
 				setUser(null)
 				setMustSetPassword(false)
@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				return
 			}
 
-			fleetApi.setToken(data.session.access_token)
+			platformApi.setToken(data.session.access_token)
 			localStorage.removeItem(storageKeys.token)
 			try {
 				const sessionUser = await loadHostedUser()
@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			} catch {
 				await auth.auth.signOut()
 				if (!cancelled) {
-					fleetApi.setToken(null)
+					platformApi.setToken(null)
 					clearStoredUser()
 					setUser(null)
 					setMustSetPassword(false)
@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 		void synchronizeSession()
 		const { data } = auth.auth.onAuthStateChange((event, session) => {
-			fleetApi.setToken(session?.access_token ?? null)
+			platformApi.setToken(session?.access_token ?? null)
 			if (event === 'PASSWORD_RECOVERY') {
 				setMustResetPassword(true)
 			}
@@ -178,8 +178,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			login: async ({ email, password }) => {
 				setIsAuthenticating(true)
 				try {
-					if (hasFleetApi()) {
-						const session = await fleetApi.login({
+					if (hasPlatformApi()) {
+						const session = await platformApi.login({
 							email: email.trim().toLowerCase(),
 							password,
 						})
@@ -198,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 						} else {
 							localStorage.setItem(storageKeys.token, session.token)
 						}
-						fleetApi.setToken(session.token)
+						platformApi.setToken(session.token)
 						storeUser(session.user)
 						setUser(session.user)
 						setMustSetPassword(session.user.membershipStatus === 'invited')
@@ -228,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				}
 			},
 			registerCompany: async ({ adminName, companyName, email, password }) => {
-				if (!supabaseAuth || !hasFleetApi()) {
+				if (!supabaseAuth || !hasPlatformApi()) {
 					throw new Error('Company registration requires Supabase authentication')
 				}
 
@@ -255,8 +255,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 						return { requiresEmailVerification: true }
 					}
 
-					fleetApi.setToken(data.session.access_token)
-					const sessionUser = await fleetApi.completeRegistration()
+					platformApi.setToken(data.session.access_token)
+					const sessionUser = await platformApi.completeRegistration()
 					storeUser(sessionUser)
 					setUser(sessionUser)
 					return { requiresEmailVerification: false }
@@ -293,7 +293,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				const { error } = await supabaseAuth.auth.updateUser({ password })
 				if (error) throw error
 				if (user?.membershipStatus === 'invited') {
-					const sessionUser = await fleetApi.acceptInvitation()
+					const sessionUser = await platformApi.acceptInvitation()
 					storeUser(sessionUser)
 					setUser(sessionUser)
 					setMustSetPassword(false)
@@ -311,14 +311,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				if (error) {
 					throw error
 				}
-				const sessionUser = await fleetApi.acceptInvitation()
+				const sessionUser = await platformApi.acceptInvitation()
 				storeUser(sessionUser)
 				setUser(sessionUser)
 				setMustSetPassword(false)
 				setMustResetPassword(false)
 			},
 			logout: () => {
-				fleetApi.setToken(null)
+				platformApi.setToken(null)
 				clearStoredUser()
 				setUser(null)
 				setMustSetPassword(false)

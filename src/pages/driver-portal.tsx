@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Car, CreditCard, Download, LoaderCircle, Pencil, Plus, Route, Undo2 } from 'lucide-react'
 import { Badge, Button, Card, Dialog, Drawer, EmptyState, Field, MetricCard, PageHeader, SelectInput, Table, TextInput } from '../components/ui'
 import { formatCurrency, formatNumber } from '../data/formatters'
-import { fleetApi } from '../services/fleet-api'
+import { platformApi } from '../services/platform-api'
 import type { DriverTransactionDraft, DriverWorkspace, ServiceType, Transaction } from '../types'
 import { statusTone } from './helpers'
 import { TransactionTimeline } from '../components/transaction-timeline'
@@ -41,7 +41,7 @@ export function DriverPortalPage() {
 	)
 
 	useEffect(() => {
-		fleetApi.getDriverWorkspace()
+		platformApi.getDriverWorkspace()
 			.then(setWorkspace)
 			.catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Unable to load driver workspace'))
 	}, [])
@@ -110,11 +110,11 @@ export function DriverPortalPage() {
 		setIsSaving(true)
 		try {
 			let saved = editingTransaction
-				? await fleetApi.updateDriverTransaction(editingTransaction.id, draft)
-				: await fleetApi.createDriverTransaction(draft)
+				? await platformApi.updateDriverTransaction(editingTransaction.id, draft)
+				: await platformApi.createDriverTransaction(draft)
 			if (receiptFile) {
 				try {
-					saved = await fleetApi.uploadDriverReceipt(saved.id, receiptFile)
+					saved = await platformApi.uploadDriverReceipt(saved.id, receiptFile)
 				} catch (uploadError) {
 					setWorkspace((current) => current && ({ ...current, transactions: editingTransaction
 						? current.transactions.map((transaction) => transaction.id === saved.id ? saved : transaction)
@@ -142,7 +142,7 @@ export function DriverPortalPage() {
 	async function openReceipt(transaction: Transaction) {
 		setIsOpeningReceipt(true)
 		try {
-			const { url } = await fleetApi.getReceiptUrl(transaction.id)
+			const { url } = await platformApi.getReceiptUrl(transaction.id)
 			const link = document.createElement('a')
 			link.href = url
 			link.target = '_blank'
@@ -159,7 +159,7 @@ export function DriverPortalPage() {
 		if (!window.confirm('Withdraw this pending expense?')) return
 		setIsWithdrawing(true)
 		try {
-			const withdrawn = await fleetApi.withdrawDriverTransaction(transaction.id)
+			const withdrawn = await platformApi.withdrawDriverTransaction(transaction.id)
 			setWorkspace((current) => current && ({ ...current, transactions: current.transactions.map((item) => item.id === withdrawn.id ? withdrawn : item) }))
 			setSelectedTransaction(withdrawn)
 			setSuccess('Expense withdrawn.')

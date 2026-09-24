@@ -16,11 +16,11 @@ import {
 	Toolbar,
 } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
-import { fleetApi } from '../services/fleet-api'
+import { platformApi } from '../services/platform-api'
 import { TransactionTimeline } from '../components/transaction-timeline'
 import { useTransactionEvents } from '../hooks/use-transaction-events'
 import { useAuth } from '../state/auth'
-import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useWorkspace } from '../state/workspace'
 import type { ExpenseInput, ServiceType, Transaction, TransactionStatus } from '../types'
 import { getDriverName, getServiceLabel, getVehiclePlate, statusTone } from './helpers'
 import { canCreateTransaction, canReviewTransaction, canViewReports } from '../security/permissions'
@@ -53,7 +53,7 @@ function csvCell(value: string | number) {
 
 export function TransactionsPage() {
 	const { user } = useAuth()
-	const { createTransaction, drivers, services, transactions, updateTransaction, vehicles } = useFleetWorkspace()
+	const { createTransaction, drivers, services, transactions, updateTransaction, vehicles } = useWorkspace()
 	const [searchParams, setSearchParams] = useSearchParams()
 	const handledTransactionId = useRef<string | null>(null)
 	const [query, setQuery] = useState('')
@@ -203,7 +203,7 @@ export function TransactionsPage() {
 		setIsOpeningReceipt(true)
 		setReviewError(null)
 		try {
-			const { url } = await fleetApi.getReceiptUrl(transaction.id)
+			const { url } = await platformApi.getReceiptUrl(transaction.id)
 			const link = document.createElement('a')
 			link.href = url
 			link.target = '_blank'
@@ -235,7 +235,7 @@ export function TransactionsPage() {
 		const url = URL.createObjectURL(blob)
 		const anchor = document.createElement('a')
 		anchor.href = url
-		anchor.download = `fleet-transactions-${today()}.csv`
+		anchor.download = `onemobility-transactions-${today()}.csv`
 		anchor.click()
 		URL.revokeObjectURL(url)
 	}

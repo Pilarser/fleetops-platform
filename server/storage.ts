@@ -3,9 +3,9 @@ import { dirname, resolve } from 'node:path'
 import { providers, transactions } from '../src/data/mock-data'
 import { drivers as seedDrivers, services as seedServices, vehicles as seedVehicles } from '../src/data/mock-data'
 import type { Driver, DriverWorkspace, MobilityService, Notification, ProviderLocation, Transaction, TransactionEvent, Vehicle } from '../src/types'
-import { applyDriverAssignment, applyDriverToVehicles, assignVehicleDriver } from '../shared/domain/fleet'
+import { applyDriverAssignment, applyDriverToVehicles, assignVehicleDriver } from '../shared/domain/vehicle-assignments'
 
-export interface FleetDatabase {
+export interface WorkspaceDatabase {
 	drivers: Driver[]
 	providers: ProviderLocation[]
 	services: MobilityService[]
@@ -15,9 +15,9 @@ export interface FleetDatabase {
 	vehicles: Vehicle[]
 }
 
-export interface FleetStore {
+export interface WorkspaceStore {
 	path: string
-	getWorkspace: () => Promise<FleetDatabase>
+	getWorkspace: () => Promise<WorkspaceDatabase>
 	getDriverWorkspace: (userId: string) => Promise<DriverWorkspace | undefined>
 	getTransactionEvents: (transactionId: string) => Promise<TransactionEvent[]>
 	appendTransactionEvent: (event: TransactionEvent) => Promise<TransactionEvent>
@@ -34,7 +34,7 @@ export interface FleetStore {
 	updateVehicle: (vehicle: Vehicle) => Promise<Vehicle | undefined>
 }
 
-function seedDatabase(): FleetDatabase {
+function seedDatabase(): WorkspaceDatabase {
 	return {
 		drivers: structuredClone(seedDrivers),
 		providers: structuredClone(providers),
@@ -46,7 +46,7 @@ function seedDatabase(): FleetDatabase {
 	}
 }
 
-function writeDatabase(databasePath: string, database: FleetDatabase) {
+function writeDatabase(databasePath: string, database: WorkspaceDatabase) {
 	mkdirSync(dirname(databasePath), { recursive: true })
 	writeFileSync(databasePath, JSON.stringify(database, null, 2))
 }
@@ -54,7 +54,7 @@ function writeDatabase(databasePath: string, database: FleetDatabase) {
 function readDatabase(databasePath: string) {
 	try {
 		const raw = readFileSync(databasePath, 'utf8')
-		const database = JSON.parse(raw) as FleetDatabase
+		const database = JSON.parse(raw) as WorkspaceDatabase
 		return {
 			...database,
 			services: database.services.map((service) => ({ ...service, currency: service.currency ?? 'EUR' })),
@@ -69,7 +69,8 @@ function readDatabase(databasePath: string) {
 	}
 }
 
-export function createFleetStore(path = resolve(process.env.ONEMOBILITY_DB_PATH ?? process.env.FLEET_DB_PATH ?? 'server/.data/onemobility-db.json')) {
+// FLEET_DB_PATH remains as a compatibility fallback for existing local environments.
+export function createWorkspaceStore(path = resolve(process.env.ONEMOBILITY_DB_PATH ?? process.env.FLEET_DB_PATH ?? 'server/.data/onemobility-db.json')) {
 	let database = readDatabase(path)
 
 	return {
@@ -204,5 +205,5 @@ export function createFleetStore(path = resolve(process.env.ONEMOBILITY_DB_PATH 
 			writeDatabase(path, database)
 			return updatedVehicle
 		},
-	} satisfies FleetStore
+	} satisfies WorkspaceStore
 }

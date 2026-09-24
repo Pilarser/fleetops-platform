@@ -46,7 +46,7 @@ export function LoginPage() {
 							<Info size={18} />
 						</button>
 					</div>
-					<p>Use a demo account to access the fleet operations workspace.</p>
+					<p>Use a demo account to access the mobility operations workspace.</p>
 				</div>
 				<form className="login-form" onSubmit={handleSubmit}>
 					<Field label="Email">

@@ -3,10 +3,10 @@ import { LoaderCircle, Mail, Plus, RotateCw, UserCheck, UserX, XCircle } from 'l
 import { useSearchParams } from 'react-router-dom'
 import { Badge, Button, Card, Dialog, EmptyState, Field, PageHeader, SelectInput, Table, TextInput, Toolbar } from '../components/ui'
 import { formatCurrency } from '../data/formatters'
-import { useFleetWorkspace } from '../state/fleet-workspace'
+import { useWorkspace } from '../state/workspace'
 import { useAuth } from '../state/auth'
 import { hasSupabaseAuth } from '../services/supabase-auth'
-import { fleetApi } from '../services/fleet-api'
+import { platformApi } from '../services/platform-api'
 import type { AccountLifecycleAction, Driver } from '../types'
 import { getVehiclePlate, statusTone } from './helpers'
 import { canManageFleet } from '../security/permissions'
@@ -23,7 +23,7 @@ const emptyDriverForm: DriverFormState = {
 
 export function DriversPage() {
 	const { user } = useAuth()
-	const { createDriver, drivers, inviteDriver, reloadWorkspace, updateDriver, vehicles } = useFleetWorkspace()
+	const { createDriver, drivers, inviteDriver, reloadWorkspace, updateDriver, vehicles } = useWorkspace()
 	const canManage = canManageFleet(user?.role)
 	const supportsInvitations = hasSupabaseAuth() && canManage
 	const [searchParams, setSearchParams] = useSearchParams()
@@ -56,7 +56,7 @@ export function DriversPage() {
 			const redirectUrl = action === 'resend_invitation'
 				? new URL(import.meta.env.BASE_URL, window.location.origin).toString()
 				: undefined
-			await fleetApi.manageAccount(driver.accountUserId, action, redirectUrl)
+			await platformApi.manageAccount(driver.accountUserId, action, redirectUrl)
 			await reloadWorkspace()
 		} catch (error) {
 			setPageError(error instanceof Error ? error.message : 'Unable to update the driver account')
@@ -220,7 +220,7 @@ function DriverDialog({
 	onClose: () => void
 	onSubmit: (driver: DriverFormState, sendInvitation: boolean) => Promise<void>
 	title: string
-	vehicles: ReturnType<typeof useFleetWorkspace>['vehicles']
+	vehicles: ReturnType<typeof useWorkspace>['vehicles']
 }) {
 	const [form, setForm] = useState<DriverFormState>({
 		...(driver ?? emptyDriverForm),

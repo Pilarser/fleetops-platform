@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import { expenseChanges } from '../shared/domain/expenses'
 import { transactionPayloadSchema } from './schemas'
 
-describe('shared fleet domain', () => {
+describe('shared mobility domain', () => {
 	it('accepts provider-defined service identifiers and normalizes currency', () => {
 		const expense = transactionPayloadSchema.parse({
 			date: '2026-09-22',

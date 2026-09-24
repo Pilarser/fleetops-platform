@@ -10,6 +10,7 @@ export const storageKeys = {
 	supabaseAuth: 'onemobility.supabase.auth',
 } as const
 
+// Keep these only long enough to migrate sessions created before the OneMobility rename.
 export const legacyStorageKeys = {
 	user: 'fleetos.session.user',
 	token: 'fleetos.session.token',
